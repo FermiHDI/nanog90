@@ -624,6 +624,7 @@ class HDDataGeneration:
         job_progress: Progress,
         job_task: int,
         device_sampling_rate: int,
+        data_dir: str,
     ) -> Tuple[int, int]:
         """Actual method to make records from synth netflow records.
 
@@ -633,6 +634,7 @@ class HDDataGeneration:
             job_progress (Progress): Dashboard Progress
             job_task (int): Dashboard Progress Job ID
             device_sampling_rate (int): Device sampling rate
+            data_dir (str): The directory to write the data files to
 
         Raises:
             OSError: _description_
@@ -647,10 +649,13 @@ class HDDataGeneration:
         fps_after_sampling = fps_after_sampling if fps_after_sampling > 0 else 1
         segments: int = fps // fps_after_sampling
         
+        if (len(data_dir)>0 and not data_dir.endswith("/")):
+            data_dir += "/"
+        
         try:
             # Setup output CSV files
-            csv_raw_file: TextIO = open(f"raw_flow.csv", "w")
-            csv_device_file: TextIO = open(f"device_flow.csv", "w")
+            csv_raw_file: TextIO = open(f"{data_dir}raw_flow.csv", "w")
+            csv_device_file: TextIO = open(f"{data_dir}device_flow.csv", "w")
             
             current_flow, future_flow = self.generate_flow_record(0)
             flow_csv_keys = list(current_flow.keys())
@@ -788,6 +793,7 @@ class HDDataGeneration:
         fps: int,
         _device_sampling_rate: int,
         auto_exit: bool = False,
+        data_dir: str = "",
     ) -> Tuple[int, int]:
         """Load random flows.
 
@@ -796,6 +802,7 @@ class HDDataGeneration:
             fps (int): flows per second to emulate
             device_sampling_rate (int): The sampleing rate of x:1 that the emulated device will use
             auto_exit (bool, optional): Exit when completed.  Defaults to False
+            data_dir (str): The directory to write the data files to
 
         Raises:
             IndexError: Size to big for MMAP
@@ -840,6 +847,8 @@ class HDDataGeneration:
         info_table.add_column(justify="left", no_wrap=True)
         info_table.add_column(justify="left", no_wrap=True)
         info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
+        write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
+        info_table.add_row("Writing file to:", f"{write_dir}")
         info_table.add_row(
             "",
             "",
@@ -879,6 +888,7 @@ class HDDataGeneration:
                     job_progress=job_progress,
                     job_task=cd_job_id,
                     device_sampling_rate=_device_sampling_rate,
+                    data_dir=data_dir,
                 )
                 job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
 

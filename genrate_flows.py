@@ -44,6 +44,13 @@ if __name__ == "__main__":
         help="The n:1 device flow sampling to be emulated, defaults to 1000",
     )
     parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=str,
+        default="",
+        help="The directory where the data files will be written, defaults to current directory",
+    )
+    parser.add_argument(
         "-V",
         action="version",
         version=__version__,
@@ -69,6 +76,7 @@ if __name__ == "__main__":
         fps=args.fps,
         _device_sampling_rate=args.device_sampling_rate,
         auto_exit=args.exit,
+        data_dir=args.output_dir
     )
     end = (datetime.now() - start_time)
     minutes = divmod(end.seconds, 60)
