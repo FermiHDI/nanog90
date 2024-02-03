@@ -177,7 +177,7 @@ class HDDataGeneration:
     IP2ASN_CLEAN_FILE = "ip2asn-v4-u32-clean.tsv"
     IP2ASN_FILE_URL = "https://iptoasn.com/data/ip2asn-v4-u32.tsv.gz"
     INTERNAL_ASN = 65000
-    INTERNAL_SUBNET = int(24).to_bytes(1, byteorder="big")
+    INTERNAL_SUBNET = 24
     INTERNAL_IFINDEX: NetworkInterface = {
         "ifindex": 100,
         "next_hop": "10.1.1.2",
@@ -450,14 +450,14 @@ class HDDataGeneration:
 
     def random_client(
         self,
-    ) -> Tuple[memoryview, memoryview, memoryview, int, int]:
+    ) -> Tuple[int, int, int, int, int]:
         """Randomly select an IP Address from the Internet.
 
         Randomly selects an IP Address from the Internet and provides it's
         routing information from the route table provided
 
         Returns:
-            Tuple[memoryview, memoryview, memoryview, int, int]: Selected_IP_Address: int, Next_Hop_Address: int, Subnet: int, ASN, IFIndex
+            Tuple[int, int, int, int, int]: Selected_IP_Address: int, Next_Hop_Address: int, Subnet: int, ASN, IFIndex
         """
         # Select a random route
         route_index = randrange(0, len(self.route_table))  # nosec: B311
@@ -471,26 +471,26 @@ class HDDataGeneration:
         )  # nosec: B311
         
         return (
-            memoryview(ip),
-            memoryview(route["next_hop"]),
-            memoryview(route["subnet_bits"]),
+            ip,
+            route["next_hop"],
+            route["subnet_bits"],
             route["asn"],
             route["ifindex"],
         )
 
-    def random_server(self) -> memoryview:
+    def random_server(self) -> int:
         """Randomly select a server IP Address.
 
         Args:
             server_list (_type_): List of server IP Addresses
 
         Returns:
-            memoryview: The selected servers IP Address as int
+            int: The selected servers IP Address as int
         """
         ip = self.server_list[
             randrange(0, len(self.server_list))  # nosec: B311
         ]  # nosec: B311
-        return memoryview(ip)
+        return ip
 
     def generate_flow_record(
         self,
@@ -538,8 +538,8 @@ class HDDataGeneration:
         client_flow: FlowRecord = {
             "timestamp": time_index,
             "system_id": self.system_id,
-            "srcaddr": int.from_bytes(client[0].tobytes(), byteorder="big"),
-            "dstaddr": int.from_bytes(server.tobytes(), byteorder="big"),
+            "srcaddr": client[0],
+            "dstaddr": server,
             "nexthop": self.INTERNAL_IFINDEX["next_hop_i"],
             "dPkts": client_packets,
             "dOctets": client_transfer,
@@ -552,7 +552,7 @@ class HDDataGeneration:
             "tos": 0,
             "src_as": client[3],
             "dst_as": self.INTERNAL_ASN,
-            "src_mask": int.from_bytes(client[2].tobytes(), byteorder="big"),
+            "src_mask": client[2],
             "dst_mask": self.INTERNAL_SUBNET,
             "input": client[4],
             "output": self.INTERNAL_IFINDEX["ifindex"],
@@ -566,9 +566,9 @@ class HDDataGeneration:
         server_flow: FlowRecord = {
             "timestamp": server_time,
             "system_id": self.system_id,
-            "srcaddr": int.from_bytes(server.tobytes(), byteorder="big"),
-            "dstaddr": int.from_bytes(client[0].tobytes(), byteorder="big"),
-            "nexthop": int.from_bytes(client[1].tobytes(), byteorder="big"),
+            "srcaddr": server,
+            "dstaddr": client[0],
+            "nexthop": client[1],
             "dPkts": server_packets,
             "dOctets": server_transfer,
             "first": time_index,
@@ -581,7 +581,7 @@ class HDDataGeneration:
             "src_as": self.INTERNAL_ASN,
             "dst_as": client[3],
             "src_mask": self.INTERNAL_SUBNET,
-            "dst_mask": int.from_bytes(client[2].tobytes(), byteorder="big"),
+            "dst_mask": client[2],
             "input": self.INTERNAL_IFINDEX["ifindex"],
             "output": client[4],
         }
@@ -624,7 +624,7 @@ class HDDataGeneration:
         job_progress: Progress,
         job_task: int,
         device_sampling_rate: int,
-    ) -> None:
+    ) -> Tuple[int, int]:
         """Actual method to make records from synth netflow records.
 
         Args:
@@ -640,20 +640,24 @@ class HDDataGeneration:
         flow_buffer: Dict[int, List[FlowRecord]] = {}
         time_index_ms: int = 0
         total_flows_made: int = 0
+        total_device_flows_made: int = 0
         raw_flows: List[FlowRecord] = []
         fps: int = flows_per_ms * 1000
         fps_after_sampling: int = fps // device_sampling_rate
+        fps_after_sampling = fps_after_sampling if fps_after_sampling > 0 else 1
         segments: int = fps // fps_after_sampling
         
         try:
             # Setup output CSV files
-            data_file: BinaryIO = open(f"raw_data.bin", "wb")
             csv_raw_file: TextIO = open(f"raw_flow.csv", "w")
             csv_device_file: TextIO = open(f"device_flow.csv", "w")
-            fr: FlowRecord = {}
-            flow_csv_keys = list(fr.keys())
-            raw_flow_csv_writer = csv.writer(csv_raw_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
-            device_flow_csv_writer = csv.writer(csv_device_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
+            
+            current_flow, future_flow = self.generate_flow_record(0)
+            flow_csv_keys = list(current_flow.keys())
+            # flow_csv_keys = ["src_as", "input", "timestamp", "srcaddr", "dst_mask", "dPkts", "dstport", "dst_as", "dstaddr", "srcport", "tcp_flags", "last", "output", "nexthop", "tos", "dOctets", "protocol", "system_id", "first", "src_mask"]
+            
+            raw_flow_csv_writer = csv.DictWriter(csv_raw_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
+            device_flow_csv_writer = csv.DictWriter(csv_device_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
             raw_flow_csv_writer.writeheader()
             device_flow_csv_writer.writeheader()
 
@@ -662,8 +666,10 @@ class HDDataGeneration:
             future_flow: FlowRecord = {}
 
             # Loop to make each record
+            self.log(f"Looping to make flows: {total_flows_made} of {flows_to_make}")
             while total_flows_made < flows_to_make:                    
                 # Loop to genrate the number of flow recrods required for this second
+                self.log(f"Made {total_flows_made}")
                 for _ in range(1000):
                     try:
                         # Check if there are any fuure matching flows in the buffer
@@ -691,6 +697,7 @@ class HDDataGeneration:
                     total_flows_made += len(flows)
                     
                     # Write flows files
+                    self.log("Writing to raw file")
                     for flow_record in flows:
                         raw_flow_csv_writer.writerow(flow_record)
                     
@@ -705,9 +712,11 @@ class HDDataGeneration:
                 end_index: int = device_sampling_rate - 1
                 for _ in range(segments):
                     random_flow: int = randint(start_index, end_index)
+                    random_flow = random_flow if random_flow < len(raw_flows) else len(raw_flows) - 1
                     device_flow_csv_writer.writerow(raw_flows[random_flow])
                     start_index = end_index + 1
-                    end_index = end_index + device_sampling_rate
+                    end_index = end_index + device_sampling_rate - 1
+                    total_device_flows_made += 1
                 raw_flows.clear()
                 job_progress.update(
                     task_id=job_task,
@@ -720,8 +729,6 @@ class HDDataGeneration:
         
         finally:
             try:
-                data_file.flush()
-                data_file.close()
                 csv_raw_file.flush()
                 csv_raw_file.close()
                 csv_device_file.flush()
@@ -730,6 +737,8 @@ class HDDataGeneration:
                 pass
             del raw_flows
             del flows
+        
+        return (total_flows_made, total_device_flows_made)
 
     def make_layout(self) -> None:
         """Build display layout."""
@@ -772,7 +781,6 @@ class HDDataGeneration:
                 f" {message}",
             )
         )
-        # log.info(message)
 
     def load_random_data(
         self,
@@ -780,7 +788,7 @@ class HDDataGeneration:
         fps: int,
         _device_sampling_rate: int,
         auto_exit: bool = False,
-    ) -> Tuple[int, int, int]:
+    ) -> Tuple[int, int]:
         """Load random flows.
 
         Args:
@@ -798,6 +806,7 @@ class HDDataGeneration:
 
         # Quick calculations the amount of data being produced
         flows_per_ms = fps // 1000
+        flows_per_ms = flows_per_ms if flows_per_ms > 0 else 1
         total_flows_to_make = (time * 1000 * flows_per_ms)
         
         # Setup the info display
@@ -814,12 +823,10 @@ class HDDataGeneration:
             SpinnerColumn(),
             BarColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            DownloadColumn(),
-            TransferSpeedColumn(),
             expand=False,
         )
         cd_job_id = job_progress.add_task(
-            "[cyan]Loading Data", total=total_flows_to_make
+            "[cyan]Generating Data", total=total_flows_to_make
         )
         self.layout["meta"].update(
             Panel(
@@ -866,7 +873,7 @@ class HDDataGeneration:
                 )
                 rt_progress.update(task_id=rt_job_id, advance=1)
                 self.log("Generating Flow Data")
-                self.generate_data(
+                total_flows_made, total_device_flows_made = self.generate_data(
                     flows_to_make=total_flows_to_make,
                     flows_per_ms=flows_per_ms,
                     job_progress=job_progress,
@@ -891,4 +898,4 @@ class HDDataGeneration:
         except KeyboardInterrupt as e:
             self.log(f"Keyboard interrupt: {e}")
         
-        return (total_flows_to_make)
+        return (total_flows_made, total_device_flows_made)

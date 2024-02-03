@@ -16,7 +16,7 @@ __status__ = "Development"
 __version__ = "0.0.1"
 
 import argparse
-import json
+from datetime import datetime 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -63,14 +63,17 @@ if __name__ == "__main__":
     
     gen.make_layout()
 
-    flows_made = gen.load_random_data(
+    start_time = datetime.now()
+    flows_made, device_flows_made = gen.load_random_data(
         time=args.time,
         fps=args.fps,
         _device_sampling_rate=args.device_sampling_rate,
-        collector_fps=args.collector_limit,
         auto_exit=args.exit,
     )
+    end = (datetime.now() - start_time)
+    minutes = divmod(end.seconds, 60)
 
-    print(
-        f"Done!"
-    )
+    print(f"Done!")
+    print(f"Total raw flows made: {flows_made}")
+    print(f"Total device sampled flows made: {device_flows_made}")
+    print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")

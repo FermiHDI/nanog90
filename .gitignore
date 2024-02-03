@@ -1,3 +1,8 @@
+# App 
+ip2asn-v4-*.*
+raw_*.*
+device_flow.csv
+
 # Python
 __python__/
 
