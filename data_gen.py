@@ -191,7 +191,7 @@ class HDDataGeneration:
     MIN_HEAVY_PACKET_B: int = 100000
     SERVER_AS_SOURCE_WEIGHT: int = 85  # Percent that the flow will heavy in the Server to Client direction
     SERVER_LATENCY: int = 15
-    SERVER_PORT: int = 443
+    SERVER_PORT: List[int] = [443, 80, 22]
     SERVER_RANGE: Tuple[str, str] = ("10.10.10.10", "10.10.10.100")
 
     route_table: Dict[int, ASNRoute]
@@ -534,6 +534,11 @@ class HDDataGeneration:
         server_packets: int = (
             server_transfer // 1200
         )  # L3 Packet Size in Bytes
+        start_time: int = randint(  # nosec: B311
+            1, 60000
+        ) - time_index
+        server_port: int = self.SERVER_PORT[randint(0,2)]
+        
         # Client Flow Record
         client_flow: FlowRecord = {
             "timestamp": time_index,
@@ -543,10 +548,10 @@ class HDDataGeneration:
             "nexthop": self.INTERNAL_IFINDEX["next_hop_i"],
             "dPkts": client_packets,
             "dOctets": client_transfer,
-            "first": time_index,
+            "first": start_time,
             "last": time_index,
             "srcport": client_port,
-            "dstport": self.SERVER_PORT,
+            "dstport": server_port,
             "tcp_flags": 0,
             "protocol": 6,
             "tos": 0,
@@ -573,7 +578,7 @@ class HDDataGeneration:
             "dOctets": server_transfer,
             "first": time_index,
             "last": time_index,
-            "srcport": self.SERVER_PORT,
+            "srcport": server_port,
             "dstport": client_port,
             "tcp_flags": 0,
             "protocol": 6,
@@ -623,7 +628,7 @@ class HDDataGeneration:
         flows_per_ms: int,
         job_progress: Progress,
         job_task: int,
-        device_sampling_rate: int,
+        sampling_rate: int,
         data_dir: str,
     ) -> Tuple[int, int]:
         """Actual method to make records from synth netflow records.
@@ -633,19 +638,19 @@ class HDDataGeneration:
             flows_per_ms (int): Flow per millisecond
             job_progress (Progress): Dashboard Progress
             job_task (int): Dashboard Progress Job ID
-            device_sampling_rate (int): Device sampling rate
+            sampling_rate (int): Sampling rate
             data_dir (str): The directory to write the data files to
 
         Raises:
             OSError: _description_
         """
         flow_buffer: Dict[int, List[FlowRecord]] = {}
-        time_index_ms: int = 0
+        time_index_ms: int = 60000 # Start 1 min so first flows can have a postive start time
         total_flows_made: int = 0
-        total_device_flows_made: int = 0
+        total_sampled_flows_made: int = 0
         raw_flows: List[FlowRecord] = []
         fps: int = flows_per_ms * 1000
-        fps_after_sampling: int = fps // device_sampling_rate
+        fps_after_sampling: int = fps // sampling_rate
         fps_after_sampling = fps_after_sampling if fps_after_sampling > 0 else 1
         segments: int = fps // fps_after_sampling
         
@@ -655,16 +660,15 @@ class HDDataGeneration:
         try:
             # Setup output CSV files
             csv_raw_file: TextIO = open(f"{data_dir}raw_flow.csv", "w")
-            csv_device_file: TextIO = open(f"{data_dir}device_flow.csv", "w")
+            csv_sampled_file: TextIO = open(f"{data_dir}sampled_flow.csv", "w")
             
             current_flow, future_flow = self.generate_flow_record(0)
             flow_csv_keys = list(current_flow.keys())
-            # flow_csv_keys = ["src_as", "input", "timestamp", "srcaddr", "dst_mask", "dPkts", "dstport", "dst_as", "dstaddr", "srcport", "tcp_flags", "last", "output", "nexthop", "tos", "dOctets", "protocol", "system_id", "first", "src_mask"]
             
             raw_flow_csv_writer = csv.DictWriter(csv_raw_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
-            device_flow_csv_writer = csv.DictWriter(csv_device_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
+            sampled_flow_csv_writer = csv.DictWriter(csv_sampled_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
             raw_flow_csv_writer.writeheader()
-            device_flow_csv_writer.writeheader()
+            sampled_flow_csv_writer.writeheader()
 
             flows: List[FlowRecord] = []
             current_flow: FlowRecord = {}
@@ -714,14 +718,14 @@ class HDDataGeneration:
                     flows.clear()
                 
                 start_index: int = 0
-                end_index: int = device_sampling_rate - 1
+                end_index: int = sampling_rate - 1
                 for _ in range(segments):
                     random_flow: int = randint(start_index, end_index)
                     random_flow = random_flow if random_flow < len(raw_flows) else len(raw_flows) - 1
-                    device_flow_csv_writer.writerow(raw_flows[random_flow])
+                    sampled_flow_csv_writer.writerow(raw_flows[random_flow])
                     start_index = end_index + 1
-                    end_index = end_index + device_sampling_rate - 1
-                    total_device_flows_made += 1
+                    end_index = end_index + sampling_rate - 1
+                    total_sampled_flows_made += 1
                 raw_flows.clear()
                 job_progress.update(
                     task_id=job_task,
@@ -736,14 +740,14 @@ class HDDataGeneration:
             try:
                 csv_raw_file.flush()
                 csv_raw_file.close()
-                csv_device_file.flush()
-                csv_device_file.close()
+                csv_sampled_file.flush()
+                csv_sampled_file.close()
             except OSError:
                 pass
             del raw_flows
             del flows
         
-        return (total_flows_made, total_device_flows_made)
+        return (total_flows_made, total_sampled_flows_made)
 
     def make_layout(self) -> None:
         """Build display layout."""
@@ -791,7 +795,7 @@ class HDDataGeneration:
         self,
         time: int,
         fps: int,
-        _device_sampling_rate: int,
+        sampling_rate: int,
         auto_exit: bool = False,
         data_dir: str = "",
     ) -> Tuple[int, int]:
@@ -800,7 +804,7 @@ class HDDataGeneration:
         Args:
             time (int): Time semulated in seconds
             fps (int): flows per second to emulate
-            device_sampling_rate (int): The sampleing rate of x:1 that the emulated device will use
+            sampling_rate (int): The sampleing rate of x:1 that the emulated will use
             auto_exit (bool, optional): Exit when completed.  Defaults to False
             data_dir (str): The directory to write the data files to
 
@@ -882,12 +886,12 @@ class HDDataGeneration:
                 )
                 rt_progress.update(task_id=rt_job_id, advance=1)
                 self.log("Generating Flow Data")
-                total_flows_made, total_device_flows_made = self.generate_data(
+                total_flows_made, total_sampled_flows_made = self.generate_data(
                     flows_to_make=total_flows_to_make,
                     flows_per_ms=flows_per_ms,
                     job_progress=job_progress,
                     job_task=cd_job_id,
-                    device_sampling_rate=_device_sampling_rate,
+                    sampling_rate=sampling_rate,
                     data_dir=data_dir,
                 )
                 job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
@@ -908,4 +912,4 @@ class HDDataGeneration:
         except KeyboardInterrupt as e:
             self.log(f"Keyboard interrupt: {e}")
         
-        return (total_flows_made, total_device_flows_made)
+        return (total_flows_made, total_sampled_flows_made)

@@ -37,11 +37,11 @@ if __name__ == "__main__":
         help="The Flow rate to simulate in the data, defaults to 200000",
     )
     parser.add_argument(
-        "-d",
-        "--device_sampling_rate",
+        "-s",
+        "--sampling_rate",
         type=int,
         default=1000,
-        help="The n:1 device flow sampling to be emulated, defaults to 1000",
+        help="The n:1 flow sampling to be emulated, defaults to 1000",
     )
     parser.add_argument(
         "-o",
@@ -71,10 +71,10 @@ if __name__ == "__main__":
     gen.make_layout()
 
     start_time = datetime.now()
-    flows_made, device_flows_made = gen.load_random_data(
+    flows_made, sampled_flows_made = gen.load_random_data(
         time=args.time,
         fps=args.fps,
-        _device_sampling_rate=args.device_sampling_rate,
+        sampling_rate=args.sampling_rate,
         auto_exit=args.exit,
         data_dir=args.output_dir
     )
@@ -83,5 +83,5 @@ if __name__ == "__main__":
 
     print(f"Done!")
     print(f"Total raw flows made: {flows_made}")
-    print(f"Total device sampled flows made: {device_flows_made}")
+    print(f"Total sampled flows made: {sampled_flows_made}")
     print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
