@@ -184,16 +184,16 @@ class Graphing:
             pd.DataFrame: A dataframe of the raw flow dataframe
         """
         agg_df: pd.DataFrame = df.query(query_str)
-        print(agg_df)
         bytes_per_second: pd.Series = (agg_df["dOctets"] / (agg_df["last"] - agg_df["first"])) / 1000000
         agg_df["mbps"] = bytes_per_second
     
         agg_df["timestamp"] = pd.to_datetime(agg_df["timestamp"], unit="ms")
         agg_df.set_index("timestamp", inplace=True)
     
-        agg_df = agg_df[["mbps"]].resample("1min").mean().reset_index()
+        agg_df = agg_df.resample("1min").mean().reset_index()
+        print(agg_df)
     
-        del bytes_, megabytes_
+        del bytes_per_second
     
         return agg_df
         
@@ -235,7 +235,7 @@ class Graphing:
         
         return peering_report
     
-    def save_df_as_line_graph_png(self, df: pd.DataFrame, filename: str) -> bool:
+    def save_df_as_line_graph_png(self, df: pd.DataFrame, filename: str, title: str, color: str) -> bool:
         """Save a dataframe as a line graph png image file.
         args:
             df (pd.DataFrame): The dataframe to save as a PNG images
@@ -245,25 +245,21 @@ class Graphing:
         """
         rc: bool = False
         try:
-            fig = go.Figure(
-                data=[
-                    go.Table(
-                        header=dict(
-                            values=list(df.columns),
-                            fill_color='paleturquoise',
-                            align='left'
-                        ),
-                        cells=dict(
-                            values=df.values.tolist(),
-                            fill_color='lavender',
-                            align='left'
-                        )
-                    )
-                ]
+            fig = px.line(
+                df, 
+                x="timestamp", 
+                y="mbps", 
+                color=color,
+                
+                labels={"mbps": "Ingress MB/s", "srcaddr": "Source IP", "timestamp": "Time", "src_as": "Source AS"},
+            )
+            fig.update_traces(textposition='top center')
+            fig.update_layout(
+                title_text=title,
+                showlegend=True
             )
             
             fig.write_image(filename)
-            fig.show()
             rc = True
         except Exception as e:
             print(f'There was an error in {filename} output: {e}')
@@ -293,12 +289,11 @@ class Graphing:
             )
             fig.update_traces(textposition='top center')
             fig.update_layout(
-                title_text=f'Moch Peering Report For Top {df.shape[0]} ASNs',
+                title_text=f'Peering Report For Top {df.shape[0]} ASNs',
                 showlegend=True
             )
             
             fig.write_image(filename)
-            fig.show()
             rc = True
             
         except Exception as e:
@@ -316,6 +311,7 @@ class Graphing:
         """
         rc: bool = False
         try:
+            df.index.name = "id"
             df.to_csv(filename)
             rc = True
         except Exception as e:
@@ -348,7 +344,12 @@ class Graphing:
             for i in range(0, 3):
                 print(f"Generating report {i+1} of 3 for address {address_queries[i]}")
                 agg_src_adders_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"srcaddr == {address_queries[i]}")
-                if not self.save_df_as_line_graph_png(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}line_graph_for_{address_queries[i]}.png"):
+                if not self.save_df_as_line_graph_png(
+                    df=agg_src_adders_dfs[i], 
+                    filename=f"{self.output_dir}line_graph_for_ip_{address_queries[i]}.png", 
+                    title=f"MB/s for source IP {address_queries[i]}", 
+                    color="srcaddr"
+                ):
                     rc = False
                     break
                 if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}ip_{address_queries[i]}.csv"):
@@ -357,7 +358,12 @@ class Graphing:
                                 
                 print(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
                 agg_src_as_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"src_as == {as_queries[i]}")
-                if not self.save_df_as_line_graph_png(df=agg_src_as_dfs[i], filename=f"{self.output_dir}line_graph_for_{as_queries[i]}.png"):
+                if not self.save_df_as_line_graph_png(
+                    df=agg_src_as_dfs[i], 
+                    filename=f"{self.output_dir}line_graph_for_as_{as_queries[i]}.png", 
+                    title=f"MB/s for source ASN {as_queries[i]}", 
+                    color="src_as"
+                ):
                     rc = False
                     break
                 if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{self.output_dir}as_{as_queries[i]}.csv"):
