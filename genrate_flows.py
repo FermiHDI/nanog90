@@ -51,6 +51,36 @@ if __name__ == "__main__":
         help="The directory where the data files will be written, defaults to current directory",
     )
     parser.add_argument(
+        "-ro",
+        "--reports_only",
+        action=argparse.BooleanOptionalAction,
+        type=bool,
+        default=False,
+        help="Genrate a reports only",
+    )
+    parser.add_argument(
+        "-nr",
+        "--no_reports",
+        action=argparse.BooleanOptionalAction,
+        type=bool,
+        default=False,
+        help="Do not genrate any reports",
+    )
+    parser.add_argument(
+        "-pr",
+        "--peering_report",
+        action=argparse.BooleanOptionalAction,
+        type=bool,
+        default=False,
+        help="Genrate perring reports",
+    )
+    parser.add_argument(
+        "--topN",
+        type=int,
+        default=10,
+        help="The length of the Top N elements to use in reports, defualts to 10",
+    )
+    parser.add_argument(
         "-V",
         action="version",
         version=__version__,
@@ -64,24 +94,38 @@ if __name__ == "__main__":
         help="Auto exit when done"
     )
     args = parser.parse_args()
-
-    from data_gen import HDDataGeneration
-    gen = HDDataGeneration()
     
-    gen.make_layout()
+    data_dir: str = args.output_dir     
+    if (len(args.output_dir) > 0 and not args.output_dir.endswith("/")):
+        data_dir += "/"
+    
+    total_start_time = datetime.now()
+    
+    if not args.reports_only:
+        from data_gen import DataGeneration
+        gen = DataGeneration()
+        
+        gen.make_layout()
 
-    start_time = datetime.now()
-    flows_made, sampled_flows_made = gen.load_random_data(
-        time=args.time,
-        fps=args.fps,
-        sampling_rate=args.sampling_rate,
-        auto_exit=args.exit,
-        data_dir=args.output_dir
-    )
-    end = (datetime.now() - start_time)
-    minutes = divmod(end.seconds, 60)
-
+        start_time = datetime.now()
+        flows_made, sampled_flows_made = gen.load_random_data(
+            time=args.time,
+            fps=args.fps,
+            sampling_rate=args.sampling_rate,
+            auto_exit=args.exit,
+            data_dir=data_dir
+        )
+        end = (datetime.now() - start_time)
+        minutes = divmod(end.seconds, 60)
+        print(f"Total raw flows made: {flows_made}")
+        print(f"Total sampled flows made: {sampled_flows_made}")
+        print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
+        
+    if not args.no_report:
+        from graph import Graphing
+        reports = Graphing()
+        
+        start_time = datetime.now()
+        reports.genrate_reports(output_dir=data_dir, peering_report=args.peering_report, topn=args.topN)
+        
     print(f"Done!")
-    print(f"Total raw flows made: {flows_made}")
-    print(f"Total sampled flows made: {sampled_flows_made}")
-    print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")

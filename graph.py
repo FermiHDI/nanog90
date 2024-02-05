@@ -41,7 +41,7 @@ fig = go.Figure()
 fig.to_image(format="png", engine="kaleido")
 # fig.write_image("images/fig1.png")
 
-class graphing:
+class Graphing:
     """Genrate graphs showing the effect of sampled flows"""
     raw_flow_csv: str = "raw_flow.csv"
     sampled_flow_csv: str = "sampled_flows.csv"
@@ -172,7 +172,7 @@ class graphing:
         """
         return bytes_ / 1000000.0
         
-    def agg_df(self, query_str: str) -> pd.DataFrame:
+    def agg_raw_df(self, query_str: str) -> pd.DataFrame:
         """Get an agraggated dataframe of the raw flow dataframe
         args:
             query_str (str): The query string to apply to the dataframe
@@ -319,4 +319,55 @@ class graphing:
             print(f'There was an error in {filename} output: {e}')
         
         return rc
+    
+    def genrate_reports(self, output_dir: str, genrate_peering_report: bool, topn: int = 0) -> bool:
+        """Generate reports
+        Args:
+            outer_dir (str): The output directory to save the reports
+            genrate_peering_report (bool): Whether or not to generate peering reports
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        rc: bool = True
         
+        if self.check_for_data_files():
+            print(f"Loading data files")
+            self.load_raw_flows()
+            self.load_sampled_flows()
+            
+            print(f"Selecting random flows to be used for queries")
+            address_queries, as_queries = self.select_random_flows()
+            
+            agg_src_as_dfs: List[pd.DataFrame] = [None] * 3
+            agg_src_adders_dfs: List[pd.DataFrame] = [None] * 3
+            
+            print(f"Generating reports")            
+            for i in range(0, 3):
+                print(f"Generating report {i+1} of 3 for address {address_queries[i]}")
+                agg_src_adders_dfs[i] = self.agg_raw_df(query_str=f"srcaddr == {address_queries[i]}")
+                if not self.save_df_as_line_graph_png(df=agg_src_adders_dfs[i], filename=f"{output_dir}line_graph_for_{address_queries[i]}.png"):
+                    rc = False
+                    break
+                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{output_dir}ip_{address_queries[i]}.csv"):
+                    rc = False
+                    break
+                                
+                print(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
+                agg_src_as_dfs[i] = self.agg_raw_df(query_str=f"src_as == {as_queries[i]}")
+                if not self.save_df_as_line_graph_png(df=agg_src_as_dfs[i], filename=f"{output_dir}line_graph_for_{as_queries[i]}.png"):
+                    rc = False
+                    break
+                if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{output_dir}as_{as_queries[i]}.csv"):
+                    rc = False
+                    break
+            
+            if rc and genrate_peering_report:
+                print(f"Generating peering reports")
+                peering_report_df: pd.DataFrame = self.peering_report(df=self.raw_flow_df, topn=topn)
+                if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{output_dir}peering_report.png"):
+                    rc = False
+                if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{output_dir}peering_report.csv"):
+                    rc = False
+
+        return rc
+         

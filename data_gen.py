@@ -161,7 +161,7 @@ class LoggingWindow:
         yield Panel(Group(*self.logs), title="Logs", title_align="left")
 
 
-class HDDataGeneration:
+class DataGeneration:
     """Produce flow random based on NetFlow v5."""
 
     RECORD_LEN = 75
@@ -653,9 +653,6 @@ class HDDataGeneration:
         fps_after_sampling: int = fps // sampling_rate
         fps_after_sampling = fps_after_sampling if fps_after_sampling > 0 else 1
         segments: int = fps // fps_after_sampling
-        
-        if (len(data_dir)>0 and not data_dir.endswith("/")):
-            data_dir += "/"
         
         try:
             # Setup output CSV files
