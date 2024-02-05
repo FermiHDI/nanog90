@@ -21,8 +21,7 @@ import plotly.express as px
 import plotly.io as pio 
 import os.path
 import errno
-from random import randrange
-import numpy as np
+from random import randrange, choices
 from typing import (
     BinaryIO,
     Dict,
@@ -58,7 +57,39 @@ class Graphing:
         self.raw_flow_file_path = f"{self.output_dir}/{self.raw_flow_csv}"
         self.sampled_flow_file_path = f"{self.output_dir}/{self.sampled_flow_csv}"
         pd.options.mode.copy_on_write = True
+    
+    def ip_int_to_string(self, ip: int) -> str:
+        """Convert an IP integer to string format
+        Args:
+            ip (int): The IP integer
+        Returns:
+            str: The IP string
+        """
+        ip_bytes: bytes = ip.to_bytes(4, byteorder="big")
+        ip_str: str = f"{ip_bytes[0]}.{ip_bytes[1]}.{ip_bytes[2]}.{ip_bytes[3]}"
         
+        return ip_str
+    
+    def get_unit_size(self, max_unit: int) -> Tuple[int, str]:
+        div = 1000
+        unit = "bps"
+        if max_unit > 1000000000000000:
+            div = 1000000000000000000
+            unit = "Ebps"
+        elif max_unit > 1000000000000:
+            div = 1000000000000000
+            unit = "Tbps"
+        elif max_unit > 1000000000:
+            div = 1000000000000
+            unit = "Gbps"
+        elif max_unit > 1000000:
+            div = 1000000000
+            unit = "Mbps"
+        elif max_unit > 1000:
+            div = 1000000
+            unit = "kbps"
+        return (div, unit)
+    
     def check_for_data_files(self) -> bool:
         """Check to see if the data files exist.
         Args:
@@ -160,21 +191,12 @@ class Graphing:
                     if _index not in index:
                         asn[i] = q.index[_index]
                         _q: pd.Series = self.raw_flow_df.query(f"src_as == {q.index[_index]}").value_counts("srcaddr").nlargest(1)
-                        addr[i] = _q.index[0]
+                        addr[i] = _q.index[0].item()
                         break
         else:
             index = False
-        
-        return (addr, asn)
             
-    def bytes_to_megabytes(self, bytes_) -> float:
-        """Convert bytes to megabytes.
-        args:
-            bytes_ (int): The number of bytes to convert
-        Returns:
-            float: The number of megabytes
-        """
-        return bytes_ / 1000000.0
+        return (addr, asn)
         
     def agg_df(self, df: pd.DataFrame, query_str: str) -> pd.DataFrame:
         """Get an agraggated dataframe of the raw flow dataframe
@@ -184,16 +206,12 @@ class Graphing:
             pd.DataFrame: A dataframe of the raw flow dataframe
         """
         agg_df: pd.DataFrame = df.query(query_str)
-        bytes_per_second: pd.Series = (agg_df["dOctets"] / (agg_df["last"] - agg_df["first"])) / 1000000
-        agg_df["mbps"] = bytes_per_second
+        agg_df["bps"] = agg_df["dOctets"] / (agg_df["last"] - agg_df["first"])
     
         agg_df["timestamp"] = pd.to_datetime(agg_df["timestamp"], unit="ms")
         agg_df.set_index("timestamp", inplace=True)
     
         agg_df = agg_df.resample("1min").mean().reset_index()
-        print(agg_df)
-    
-        del bytes_per_second
     
         return agg_df
         
@@ -206,16 +224,18 @@ class Graphing:
             pd.DataFrame: A dataframe of the peering report
         """
         
-        bytes_per_second: pd.Series = df["dOctets"] / (df["last"] - df["first"])
-        df["mbps"] = bytes_per_second.apply(self.bytes_to_megabytes)
+        df["bps"] = df["dOctets"] / (df["last"] - df["first"])
         
-        src_asns_dOctets: pd.DataFrame = df[["src_as", "mbps"]].query("src_as < 64000").groupby("src_as").mean()
-        dst_asns_dOctets: pd.DataFrame = df[["dst_as", "mbps"]].query("dst_as < 64000").groupby("dst_as").mean()
+        src_asns_dOctets: pd.DataFrame = df[["src_as", "bps"]].query("src_as < 64000").groupby("src_as").mean()
+        dst_asns_dOctets: pd.DataFrame = df[["dst_as", "bps"]].query("dst_as < 64000").groupby("dst_as").mean()
         src_asns_adders: pd.DataFrame = df[["src_as", "srcaddr"]].query("src_as < 64000")
         dst_asns_adders: pd.DataFrame = df[["dst_as", "dstaddr"]].query("dst_as < 64000")
         
-        src_asns_dOctets.rename(columns={"src_as": "as", "mbps": "src_mbps"}, inplace=True)
-        dst_asns_dOctets.rename(columns={"dst_as": "as", "mbps": "dst_mbps"}, inplace=True)
+        df2 = df.query("dst_as < 64000")
+        print(df2)
+        
+        src_asns_dOctets.rename(columns={"src_as": "as", "bps": "src_bps"}, inplace=True)
+        dst_asns_dOctets.rename(columns={"dst_as": "as", "bps": "dst_bps"}, inplace=True)
         
         src_asns_adders.rename(columns={"src_as": "as", "srcaddr": "address"}, inplace=True)
         dst_asns_adders.rename(columns={"dst_as": "as", "dstaddr": "address"}, inplace=True)
@@ -223,15 +243,14 @@ class Graphing:
         del src_asns_adders, dst_asns_adders
         
         asns: pd.DataFrame = pd.concat([src_asns_dOctets, dst_asns_dOctets, asns_adders], join="outer", axis=1)
-        asns["transit"] = np.random.randint(low=0, high=2, size=asns.shape[0])
-        total_bw: pd.Series = asns["src_mbps"] + asns["dst_mbps"]
-        asns["total_bandwidth"] = total_bw
-        del total_bw, asns_adders, src_asns_dOctets, dst_asns_dOctets
-        
+        asns["transit"] = pd.Series(choices(["Transit", "Non-Transit"], weights=[1,1], k=asns.shape[0]), index=asns.index) 
+        asns["total_bandwidth"] = asns["src_bps"] + asns["dst_bps"]
         asns.index.name = "as"
+        del asns_adders, src_asns_dOctets, dst_asns_dOctets
         
-        peering_report: pd.DataFrame = asns.sort_values(by="total_bandwidth", ascending=False).head(topn)
-        del asns, total_bw
+        peering_report: pd.DataFrame = asns.sort_values(by="total_bandwidth", ascending=False).head(topn).reset_index()
+        del asns
+        peering_report["as"] = peering_report["as"].astype(str)
         
         return peering_report
     
@@ -244,19 +263,23 @@ class Graphing:
             bool: True if successful, False otherwise
         """
         rc: bool = False
+        max_unit: int = df["bps"].max()
+        div, unit = self.get_unit_size(max_unit=max_unit)
+        df["bps"] = df["bps"] / div
         try:
             fig = px.line(
                 df, 
                 x="timestamp", 
-                y="mbps", 
+                y="bps", 
                 color=color,
                 
-                labels={"mbps": "Ingress MB/s", "srcaddr": "Source IP", "timestamp": "Time", "src_as": "Source AS"},
+                labels={"bps": "Ingress Traffic", "srcaddr": "Source IP", "timestamp": "Time", "src_as": "Source AS"},
             )
             fig.update_traces(textposition='top center')
             fig.update_layout(
                 title_text=title,
-                showlegend=True
+                showlegend=True,
+                yaxis_ticksuffix=f" {unit}",
             )
             
             fig.write_image(filename)
@@ -275,22 +298,32 @@ class Graphing:
             bool: True if successful, False otherwise
         """
         rc: bool = False
+        max_unit: int = df["src_bps"].max()
+        src_div, src_unit = self.get_unit_size(max_unit=max_unit)
+        df["src_bps"] = df["src_bps"] / src_div
+        
+        max_unit = df["dst_bps"].max()
+        dst_div, dst_unit = self.get_unit_size(max_unit=max_unit)
+        df["dst_bps"] = df["dst_bps"] / dst_div
+        
         try:
             fig = px.scatter(
                 df,
-                x="src_mbps",
-                y="dst_mbps",
+                x="src_bps",
+                y="dst_bps",
                 size="address",
                 color="transit",
                 text="as",
-                labels={"src_mbps": "Ingress MB/s", "dst_mbps": "Egress MB/s", "address": "Count of unqiue IPs", "transit": "Transit", "as": "ASN"}, 
+                labels={"src_bps": "Ingress Traffic", "dst_bps": "Egress Traffic", "address": "Count of unqiue IPs", "transit": "Transit", "as": "ASN"}, 
                 hover_name="as",
-                hover_data=["src_mbps", "dst_mbps", "address"]
+                hover_data=["src_bps", "dst_bps", "address"]
             )
             fig.update_traces(textposition='top center')
             fig.update_layout(
                 title_text=f'Peering Report For Top {df.shape[0]} ASNs',
-                showlegend=True
+                showlegend=True,
+                xaxis_ticksuffix=f" {src_unit}",
+                yaxis_ticksuffix=f" {dst_unit}",
             )
             
             fig.write_image(filename)
@@ -342,41 +375,43 @@ class Graphing:
             
             print(f"Generating reports")            
             for i in range(0, 3):
-                print(f"Generating report {i+1} of 3 for address {address_queries[i]}")
+                ip: str = self.ip_int_to_string(ip=address_queries[i])
+                print(f"Generating report {i+1} of 3 for IP {ip}")
                 agg_src_adders_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"srcaddr == {address_queries[i]}")
-                if not self.save_df_as_line_graph_png(
-                    df=agg_src_adders_dfs[i], 
-                    filename=f"{self.output_dir}line_graph_for_ip_{address_queries[i]}.png", 
-                    title=f"MB/s for source IP {address_queries[i]}", 
-                    color="srcaddr"
-                ):
-                    rc = False
-                    break
-                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}ip_{address_queries[i]}.csv"):
-                    rc = False
-                    break
+                # if not self.save_df_as_line_graph_png(
+                #     df=agg_src_adders_dfs[i], 
+                #     filename=f"{self.output_dir}line_graph_for_ip_{address_queries[i]}.png", 
+                #     title=f"Traffic for source IP {ip}", 
+                #     color="srcaddr"
+                # ):
+                #     rc = False
+                #     break
+                # if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}ip_{address_queries[i]}.csv"):
+                #     rc = False
+                #     break
                                 
                 print(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
                 agg_src_as_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"src_as == {as_queries[i]}")
-                if not self.save_df_as_line_graph_png(
-                    df=agg_src_as_dfs[i], 
-                    filename=f"{self.output_dir}line_graph_for_as_{as_queries[i]}.png", 
-                    title=f"MB/s for source ASN {as_queries[i]}", 
-                    color="src_as"
-                ):
-                    rc = False
-                    break
-                if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{self.output_dir}as_{as_queries[i]}.csv"):
-                    rc = False
-                    break
+                # if not self.save_df_as_line_graph_png(
+                #     df=agg_src_as_dfs[i], 
+                #     filename=f"{self.output_dir}line_graph_for_as_{as_queries[i]}.png", 
+                #     title=f"Trafic for source ASN {as_queries[i]}", 
+                #     color="src_as"
+                # ):
+                #     rc = False
+                #     break
+                # if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{self.output_dir}as_{as_queries[i]}.csv"):
+                #     rc = False
+                #     break
             
             if rc and genrate_peering_report:
                 print(f"Generating peering reports")
                 peering_report_df: pd.DataFrame = self.peering_report(df=self.raw_flow_df, topn=topn)
-                if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{self.output_dir}peering_report.png"):
-                    rc = False
-                if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{self.output_dir}peering_report.csv"):
-                    rc = False
+                # print(peering_report_df)
+                # if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{self.output_dir}peering_report.png"):
+                #     rc = False
+                # if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{self.output_dir}peering_report.csv"):
+                #     rc = False
 
         return rc
          

@@ -534,7 +534,10 @@ class DataGeneration:
         server_packets: int = (
             server_transfer // 1200
         )  # L3 Packet Size in Bytes
-        start_time: int = time_index - randint(  # nosec: B311
+        client_start_time: int = time_index - randint(  # nosec: B311
+            1, 60000
+        )
+        server_start_time: int = time_index - randint(  # nosec: B311
             1, 60000
         )
         server_port: int = self.SERVER_PORT[randint(0,2)]
@@ -548,7 +551,7 @@ class DataGeneration:
             "nexthop": self.INTERNAL_IFINDEX["next_hop_i"],
             "dPkts": client_packets,
             "dOctets": client_transfer,
-            "first": start_time,
+            "first": client_start_time,
             "last": time_index,
             "srcport": client_port,
             "dstport": server_port,
@@ -576,7 +579,7 @@ class DataGeneration:
             "nexthop": client[1],
             "dPkts": server_packets,
             "dOctets": server_transfer,
-            "first": time_index,
+            "first": server_start_time,
             "last": time_index,
             "srcport": server_port,
             "dstport": client_port,
