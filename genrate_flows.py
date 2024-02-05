@@ -117,15 +117,26 @@ if __name__ == "__main__":
         )
         end = (datetime.now() - start_time)
         minutes = divmod(end.seconds, 60)
+        
+        print(f"Done genrating data")
         print(f"Total raw flows made: {flows_made}")
         print(f"Total sampled flows made: {sampled_flows_made}")
         print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
         
-    if not args.no_report:
+    if not args.no_reports:
         from graph import Graphing
         reports = Graphing()
         
         start_time = datetime.now()
         reports.genrate_reports(output_dir=data_dir, peering_report=args.peering_report, topn=args.topN)
+        end = (datetime.now() - start_time)
+        minutes = divmod(end.seconds, 60)
         
+        print(f"Done making reports")
+        print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
+        
+    total_end = (datetime.now() - total_start_time)
+    total_minutes = divmod(total_end.seconds, 60)
+    
     print(f"Done!")
+    print(f"Time Taken: {total_minutes[0]} minutes, {total_minutes[1]} seconds")
