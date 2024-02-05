@@ -44,7 +44,7 @@ fig.to_image(format="png", engine="kaleido")
 class Graphing:
     """Genrate graphs showing the effect of sampled flows"""
     raw_flow_csv: str = "raw_flow.csv"
-    sampled_flow_csv: str = "sampled_flows.csv"
+    sampled_flow_csv: str = "sampled_flow.csv"
     output_dir: str = ""
     raw_flow_file_path: str = ""
     sampled_flow_file_path: str = ""
@@ -71,8 +71,8 @@ class Graphing:
             
         rc = True if (rc) and (os.path.isfile(f"{self.raw_flow_file_path}")) and (os.path.isfile(f"{self.sampled_flow_file_path}")) else False
         if not rc:
-            filename = "File "
-            filename += self.raw_flow_csv if os.path.isfile(f"{self.raw_flow_file_path}") else self.sampled_flow_csv
+            filename = f"File {self.output_dir}"
+            filename += self.sampled_flow_csv if os.path.isfile(f"{self.raw_flow_file_path}") else self.raw_flow_csv
             filename += " Not Found"
         
         if not rc:
@@ -147,16 +147,16 @@ class Graphing:
         addr: List[int] = [0] * 3
         asn: List[int] = [0] * 3
         
-        if self.raw_flow_df.shape[0] > 3:
-            q: pd.Series = self.raw_flow_df.query("src_as < 64000").value_counts("src_as").nlargest(10)
+        q: pd.Series = self.raw_flow_df.query("src_as < 64000").value_counts("src_as").nlargest(10)
+        if q.shape[0] > 3:
             for i in range(0, 3):
                 while True:
                     _index: int = randrange(0, q.shape[0])
                     # Check if we alrady have this index in our list
                     if _index not in index:
                         asn[i] = q.index[_index]
-                        q = self.raw_flow_df.query(f"src_as == {q.index[_index]}").value_counts("srcaddr").nlargest(10)
-                        addr[i] = q.index[_index]
+                        _q: pd.Series = self.raw_flow_df.query(f"src_as == {q.index[_index]}").value_counts("srcaddr").nlargest(1)
+                        addr[i] = _q.index[0]
                         break
         else:
             index = False
@@ -320,11 +320,11 @@ class Graphing:
         
         return rc
     
-    def genrate_reports(self, output_dir: str, genrate_peering_report: bool, topn: int = 0) -> bool:
+    def genrate_reports(self, genrate_peering_report: bool, topn: int = 0) -> bool:
         """Generate reports
         Args:
-            outer_dir (str): The output directory to save the reports
             genrate_peering_report (bool): Whether or not to generate peering reports
+            topn (int): The number of top peers to show
         Returns:
             bool: True if successful, False otherwise
         """
@@ -345,28 +345,28 @@ class Graphing:
             for i in range(0, 3):
                 print(f"Generating report {i+1} of 3 for address {address_queries[i]}")
                 agg_src_adders_dfs[i] = self.agg_raw_df(query_str=f"srcaddr == {address_queries[i]}")
-                if not self.save_df_as_line_graph_png(df=agg_src_adders_dfs[i], filename=f"{output_dir}line_graph_for_{address_queries[i]}.png"):
+                if not self.save_df_as_line_graph_png(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}line_graph_for_{address_queries[i]}.png"):
                     rc = False
                     break
-                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{output_dir}ip_{address_queries[i]}.csv"):
+                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}ip_{address_queries[i]}.csv"):
                     rc = False
                     break
                                 
                 print(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
                 agg_src_as_dfs[i] = self.agg_raw_df(query_str=f"src_as == {as_queries[i]}")
-                if not self.save_df_as_line_graph_png(df=agg_src_as_dfs[i], filename=f"{output_dir}line_graph_for_{as_queries[i]}.png"):
+                if not self.save_df_as_line_graph_png(df=agg_src_as_dfs[i], filename=f"{self.output_dir}line_graph_for_{as_queries[i]}.png"):
                     rc = False
                     break
-                if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{output_dir}as_{as_queries[i]}.csv"):
+                if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{self.output_dir}as_{as_queries[i]}.csv"):
                     rc = False
                     break
             
             if rc and genrate_peering_report:
                 print(f"Generating peering reports")
                 peering_report_df: pd.DataFrame = self.peering_report(df=self.raw_flow_df, topn=topn)
-                if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{output_dir}peering_report.png"):
+                if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{self.output_dir}peering_report.png"):
                     rc = False
-                if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{output_dir}peering_report.csv"):
+                if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{self.output_dir}peering_report.csv"):
                     rc = False
 
         return rc

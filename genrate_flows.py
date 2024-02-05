@@ -125,10 +125,10 @@ if __name__ == "__main__":
         
     if not args.no_reports:
         from graph import Graphing
-        reports = Graphing()
+        reports = Graphing(output_dir=data_dir)
         
         start_time = datetime.now()
-        reports.genrate_reports(output_dir=data_dir, peering_report=args.peering_report, topn=args.topN)
+        reports.genrate_reports(genrate_peering_report=args.peering_report, topn=args.topN)
         end = (datetime.now() - start_time)
         minutes = divmod(end.seconds, 60)
         
