@@ -534,9 +534,9 @@ class DataGeneration:
         server_packets: int = (
             server_transfer // 1200
         )  # L3 Packet Size in Bytes
-        start_time: int = randint(  # nosec: B311
+        start_time: int = time_index - randint(  # nosec: B311
             1, 60000
-        ) - time_index
+        )
         server_port: int = self.SERVER_PORT[randint(0,2)]
         
         # Client Flow Record

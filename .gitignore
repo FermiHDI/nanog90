@@ -2,6 +2,8 @@
 ip2asn-v4-*.*
 raw_*.*
 device_flow.csv
+sampled_flow.csv
+data/
 
 # Python
 __python__/

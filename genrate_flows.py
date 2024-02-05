@@ -139,4 +139,4 @@ if __name__ == "__main__":
     total_minutes = divmod(total_end.seconds, 60)
     
     print(f"Done!")
-    print(f"Time Taken: {total_minutes[0]} minutes, {total_minutes[1]} seconds")
+    print(f"Total Time Taken: {total_minutes[0]} minutes, {total_minutes[1]} seconds")
