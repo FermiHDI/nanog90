@@ -203,15 +203,16 @@ class graphing:
             pd.DataFrame: A dataframe of the peering report
         """
         
-        # We are cheating here and asuming that all flows took excatly 1 sec
+        bytes_per_second: pd.Series = df["dOctets"] / (df["last"] - df["first"])
+        df["mbps"] = bytes_per_second.apply(self.bytes_to_megabytes)
         
-        src_asns_dOctets: pd.DataFrame = df[["src_as", "dOctets"]].query("src_as < 64000").groupby("src_as").sum()
-        dst_asns_dOctets: pd.DataFrame = df[["dst_as", "dOctets"]].query("dst_as < 64000").groupby("dst_as").sum()
+        src_asns_dOctets: pd.DataFrame = df[["src_as", "mbps"]].query("src_as < 64000").groupby("src_as").mean()
+        dst_asns_dOctets: pd.DataFrame = df[["dst_as", "mbps"]].query("dst_as < 64000").groupby("dst_as").mean()
         src_asns_adders: pd.DataFrame = df[["src_as", "srcaddr"]].query("src_as < 64000")
         dst_asns_adders: pd.DataFrame = df[["dst_as", "dstaddr"]].query("dst_as < 64000")
         
-        src_asns_dOctets.rename(columns={"src_as": "as", "dOctets": "src_dOctets"}, inplace=True)
-        dst_asns_dOctets.rename(columns={"dst_as": "as", "dOctets": "dst_dOctets"}, inplace=True)
+        src_asns_dOctets.rename(columns={"src_as": "as", "mbps": "src_mbps"}, inplace=True)
+        dst_asns_dOctets.rename(columns={"dst_as": "as", "mbps": "dst_mbps"}, inplace=True)
         
         src_asns_adders.rename(columns={"src_as": "as", "srcaddr": "address"}, inplace=True)
         dst_asns_adders.rename(columns={"dst_as": "as", "dstaddr": "address"}, inplace=True)
@@ -219,19 +220,17 @@ class graphing:
         del src_asns_adders, dst_asns_adders
         
         asns: pd.DataFrame = pd.concat([src_asns_dOctets, dst_asns_dOctets, asns_adders], join="outer", axis=1)
-        
-        _bytes: pd.Series = asns["src_dOctets"]
-        _megabytes: pd.Series = _bytes.apply(self.bytes_to_megabytes)
-        asns["src_dOctets"] = _megabytes
-        
-        _bytes = asns["dst_dOctets"]
-        _megabytes: pd.Series = _bytes.apply(self.bytes_to_megabytes)
-        asns["dst_dOctets"] = _megabytes
-        
         asns["transit"] = np.random.randint(low=0, high=2, size=asns.shape[0])
+        total_bw: pd.Series = asns["src_mbps"] + asns["dst_mbps"]
+        asns["total_bandwidth"] = total_bw
+        del total_bw, asns_adders, src_asns_dOctets, dst_asns_dOctets
+        
         asns.index.name = "as"
         
-        return asns
+        peering_report: pd.DataFrame = asns.sort_values(by="total_bandwidth", ascending=False).head(topn)
+        del asns, total_bw
+        
+        return peering_report
     
     def save_df_as_line_graph_png(self, df: pd.DataFrame, filename: str) -> bool:
         """Save a dataframe as a line graph png image file.
@@ -259,14 +258,16 @@ class graphing:
                     )
                 ]
             )
+            
             fig.write_image(filename)
+            fig.show()
             rc = True
         except Exception as e:
             print(f'There was an error in {filename} output: {e}')
         
         return rc
     
-    def save_df_as_bubble_chart_png(self, df: pd.DataFrame, filename: str) -> bool:
+    def save_peering_df_as_bubble_chart_png(self, df: pd.DataFrame, filename: str) -> bool:
         """Save a dataframe as a bubble chart png image file.
         args:
             df (pd.DataFrame): The dataframe to save as a PNG images
@@ -278,15 +279,25 @@ class graphing:
         try:
             fig = px.scatter(
                 df,
-                x="src_dOctets",
-                y="dst_dOctets",
-                size="transit",
+                x="src_mbps",
+                y="dst_mbps",
+                size="address",
                 color="transit",
+                text="as",
+                labels={"src_mbps": "Ingress MB/s", "dst_mbps": "Egress MB/s", "address": "Count of unqiue IPs", "transit": "Transit", "as": "ASN"}, 
                 hover_name="as",
-                hover_data=["src_dOctets", "dst_dOctets", "transit"]
+                hover_data=["src_mbps", "dst_mbps", "address"]
             )
+            fig.update_traces(textposition='top center')
+            fig.update_layout(
+                title_text=f'Moch Peering Report For Top {df.shape[0]} ASNs',
+                showlegend=True
+            )
+            
             fig.write_image(filename)
+            fig.show()
             rc = True
+            
         except Exception as e:
             print(f'There was an error in {filename} output: {e}')
         
