@@ -99,9 +99,11 @@ class Graphing:
                         "dstaddr", 
                         "src_as", 
                         "dst_as", 
-                        "dOctets"
+                        "dOctets",
+                        "last",
+                        "first",
                     ]
-                ).set_index("timestamp")
+                )
                 if self.raw_flow_df.empty:
                     rc = False
                     raise RuntimeError('CSV is empty')
@@ -119,7 +121,7 @@ class Graphing:
         if rc:
             try:
                 self.sampled_flow_df = pd.read_csv(
-                    self.sampled_flow_csv_flow_file_path,
+                    self.sampled_flow_file_path,
                     header=0,
                     usecols=[
                         "timestamp", 
@@ -127,9 +129,11 @@ class Graphing:
                         "dstaddr", 
                         "src_as", 
                         "dst_as", 
-                        "dOctets"
+                        "dOctets",
+                        "last",
+                        "first",
                     ]
-                ).set_index("timestamp")
+                )
                 if self.sampled_flow_df.empty:
                     rc = False
                     raise RuntimeError('CSV is empty')
@@ -172,23 +176,22 @@ class Graphing:
         """
         return bytes_ / 1000000.0
         
-    def agg_raw_df(self, query_str: str) -> pd.DataFrame:
+    def agg_df(self, df: pd.DataFrame, query_str: str) -> pd.DataFrame:
         """Get an agraggated dataframe of the raw flow dataframe
         args:
             query_str (str): The query string to apply to the dataframe
         Returns:
             pd.DataFrame: A dataframe of the raw flow dataframe
         """
-        agg_df: pd.DataFrame = self.raw_flow_df.query(query_str)
+        agg_df: pd.DataFrame = df.query(query_str)
+        print(agg_df)
+        bytes_per_second: pd.Series = (agg_df["dOctets"] / (agg_df["last"] - agg_df["first"])) / 1000000
+        agg_df["mbps"] = bytes_per_second
     
         agg_df["timestamp"] = pd.to_datetime(agg_df["timestamp"], unit="ms")
         agg_df.set_index("timestamp", inplace=True)
     
-        agg_df = agg_df[["dOctets"]].resample("1min").sum().reset_index()
-    
-        bytes_: pd.Series = agg_df["dOctets"]
-        megabytes_: pd.Series = bytes_.apply(self.bytes_to_megabytes)
-        agg_df["dOctets"] = megabytes_
+        agg_df = agg_df[["mbps"]].resample("1min").mean().reset_index()
     
         del bytes_, megabytes_
     
@@ -344,7 +347,7 @@ class Graphing:
             print(f"Generating reports")            
             for i in range(0, 3):
                 print(f"Generating report {i+1} of 3 for address {address_queries[i]}")
-                agg_src_adders_dfs[i] = self.agg_raw_df(query_str=f"srcaddr == {address_queries[i]}")
+                agg_src_adders_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"srcaddr == {address_queries[i]}")
                 if not self.save_df_as_line_graph_png(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}line_graph_for_{address_queries[i]}.png"):
                     rc = False
                     break
@@ -353,7 +356,7 @@ class Graphing:
                     break
                                 
                 print(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
-                agg_src_as_dfs[i] = self.agg_raw_df(query_str=f"src_as == {as_queries[i]}")
+                agg_src_as_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"src_as == {as_queries[i]}")
                 if not self.save_df_as_line_graph_png(df=agg_src_as_dfs[i], filename=f"{self.output_dir}line_graph_for_{as_queries[i]}.png"):
                     rc = False
                     break
