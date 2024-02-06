@@ -7,4 +7,4 @@ COPY  requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     mkdir /data
 
-CMD [ "python", "./genrate_flows.py", "-o /data"]
+ENTRYPOINT [ "python", "genrate_flows.py -o /data"]
