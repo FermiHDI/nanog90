@@ -4,7 +4,7 @@ LABEL Maintainer="FermiHDI"
 WORKDIR /usr/app/src
 COPY  *.py .
 COPY  requirements.txt .
-RUN mkdir /data && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN mkdir /data
 
-CMD [ "python", "./genrate_flows.py", "-o /data"]
+ENTRYPOINT [ "python", "./genrate_flows.py", "-o /data"]
