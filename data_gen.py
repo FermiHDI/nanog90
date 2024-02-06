@@ -665,10 +665,12 @@ class DataGeneration:
         
         finally:
             try:
-                csv_raw_file.flush()
-                csv_raw_file.close()
-                csv_sampled_file.flush()
-                csv_sampled_file.close()
+                if not csv_raw_file or not csv_raw_file.closed:
+                    csv_raw_file.flush()
+                    csv_raw_file.close()
+                if not csv_sampled_file or not csv_sampled_file.closed:
+                    csv_sampled_file.flush()
+                    csv_sampled_file.close()
             except OSError:
                 pass
             del raw_flows
