@@ -13,10 +13,13 @@ UNLICENSED - Private<br/>
 ALL RIGHTS RESERVED<br/>
 © COPYRIGHT 2024 FERMIHDI LIMITED
 
+## Getting Started
+
 ## Running Script In Docker
+A docker file is included to help you get up and running as fast as posabule.
 ```bash
-docker build -t fermihdi/nanog90:flowgen .
 mkdir data
+docker build -t fermihdi/nanog90:flowgen .
 docker run -v ./data:/data --name flowgen fermihdi/nanog90:flowgen
 ```
 

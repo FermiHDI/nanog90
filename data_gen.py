@@ -685,7 +685,6 @@ class DataGeneration:
             self.log(f"Looping to make flows: {total_flows_made} of {flows_to_make}")
             while total_flows_made < flows_to_make:                    
                 # Loop to genrate the number of flow recrods required for this second
-                self.log(f"Made {total_flows_made}")
                 for _ in range(1000):
                     try:
                         # Check if there are any fuure matching flows in the buffer
@@ -713,7 +712,6 @@ class DataGeneration:
                     total_flows_made += len(flows)
                     
                     # Write flows files
-                    self.log("Writing to raw file")
                     for flow_record in flows:
                         raw_flow_csv_writer.writerow(flow_record)
                     
