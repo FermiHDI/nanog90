@@ -16,7 +16,7 @@ __status__ = "Development"
 __version__ = "0.0.1"
 
 import argparse
-from datetime import datetime 
+from datetime import datetime, timezone
 from typing import (
     List,
     Tuple,
@@ -275,7 +275,7 @@ if __name__ == "__main__":
     info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
     write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
     info_table.add_row("Writing files to:", f"{write_dir}")
-    info_table.add_row("Started at:", f"{datetime.now(datetime.UTC)}",)
+    info_table.add_row("Started at:", f"{datetime.now(timezone.utc)}",)
     layout["info"].update(
         Panel(info_table, title="Information")
     )
@@ -296,7 +296,7 @@ if __name__ == "__main__":
             logging_window.append(
                 Text.assemble(
                     (
-                        f"{datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
+                        f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
                         "cyan",
                     ),
                     f" {message}",
@@ -309,7 +309,7 @@ if __name__ == "__main__":
             Args:
                 message (str): log message
             """
-            print(f"{datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z {message}")
+            print(f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z {message}")
             
     total_start_time = datetime.now()
     
@@ -318,7 +318,7 @@ if __name__ == "__main__":
             with Live(layout, refresh_per_second=10, screen=True):
                 if not args.reports_only:
                     from data_gen import DataGeneration
-                    gen = DataGeneration(log=log)
+                    gen = DataGeneration(log=log, out_dir=data_dir)
 
                     start_time = datetime.now()
                     
@@ -345,7 +345,6 @@ if __name__ == "__main__":
                         job_progress=job_progress,
                         job_task=cd_job_id,
                         sampling_rate=args.sampling_rate,
-                        data_dir=data_dir,
                     )
                     job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
                     
@@ -369,7 +368,7 @@ if __name__ == "__main__":
                 total_end = (datetime.now() - total_start_time)
                 total_minutes = divmod(total_end.seconds, 60)
                 
-                info_table.add_row("Completed at:", f"{datetime.now(datetime.UTC)}")
+                info_table.add_row("Completed at:", f"{datetime.now(timezone.utc)}")
                 info_table.add_row("Elapsed time:", f"{total_minutes[0]} minutes, {total_minutes[1]} seconds")
                 
                 if not args.exit:
@@ -391,7 +390,7 @@ if __name__ == "__main__":
     else:
         if not args.reports_only:
             from data_gen import DataGeneration
-            gen = DataGeneration(log=log)
+            gen = DataGeneration(log=log, out_dir=data_dir)
 
             start_time = datetime.now()
             
@@ -414,7 +413,6 @@ if __name__ == "__main__":
                 job_progress=job_progress,
                 job_task=cd_job_id,
                 sampling_rate=args.sampling_rate,
-                data_dir=data_dir,
             )
             
             end = (datetime.now() - start_time)

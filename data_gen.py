@@ -119,16 +119,18 @@ class DataGeneration:
 
     system_id: str = ""
     
-    def __init__(self, log, system_id: Optional[bytes] = None):
+    def __init__(self, log, out_dir: str, system_id: Optional[bytes] = None):
         """Init flow_gen class instance.
 
         If `system_id` is not given then a random 32 Byte ID is generated.
         Args:
             log: Logging function
+            out_dir (str): Output directory
             system_id (Optional[bytes]): 32 Byte System ID
         """
         self.log = log
         self.first_three = True
+        self.out_dir = out_dir
         if system_id:
             self.system_id = system_id.hex()
         else:
@@ -149,23 +151,23 @@ class DataGeneration:
         zip_file_name: str = self.IP2ASN_FILE_URL.rsplit("/", 1)[-1]
         ip2asn: List[List[str]]
         # Test for clean ASN file
-        if os.path.isfile(self.IP2ASN_CLEAN_FILE):
+        if os.path.isfile(f"{self.out_dir}{self.IP2ASN_CLEAN_FILE}"):
             self.log(
                 f"Loading a cleaned ASN list form {self.IP2ASN_CLEAN_FILE}"
             )
-            with open(self.IP2ASN_CLEAN_FILE, "r") as fd:
+            with open(f"{self.out_dir}{self.IP2ASN_CLEAN_FILE}", "r") as fd:
                 _reader = csv.reader(fd, delimiter="\t", quotechar='"')
                 ip2asn = list(_reader)
             self.log(
-                f"Loaded {len(ip2asn)} ASNs from {self.IP2ASN_CLEAN_FILE}"
+                f"Loaded {len(ip2asn)} ASNs from {self.out_dir}{self.IP2ASN_CLEAN_FILE}"
             )
         else:
             # Test for existing Raw ASN File
-            if not os.path.isfile(self.IP2ASN_FILE) and not os.path.isfile(
-                zip_file_name
+            if not os.path.isfile(f"{self.out_dir}{self.IP2ASN_FILE}") and not os.path.isfile(
+                f"{self.out_dir}{zip_file_name}"
             ):
                 self.log(
-                    f"{self.IP2ASN_FILE} was not found, downloading it from {self.IP2ASN_FILE_URL}"
+                    f"{self.out_dir}{self.IP2ASN_FILE} was not found, downloading it from {self.IP2ASN_FILE_URL}"
                 )
                 req = Request(
                     self.IP2ASN_FILE_URL,
@@ -174,23 +176,23 @@ class DataGeneration:
                 zip_resp = urlopen(req)  # nosec: B310  URL is hand coded
 
                 # Download into file, not using a temp file so the raw file is here for auditing
-                zip_file = open(zip_file_name, "wb")
+                zip_file = open(f"{self.out_dir}{zip_file_name}", "wb")
                 zip_file.write(zip_resp.read())
                 zip_file.close()
-            if not os.path.isfile(self.IP2ASN_FILE) and os.path.isfile(
-                zip_file_name
+            if not os.path.isfile(f"{self.out_dir}{self.IP2ASN_FILE}") and os.path.isfile(
+                f"{self.out_dir}{zip_file_name}"
             ):
                 # Unzip file, not using a temp file so that the file can be reused
                 self.log(
                     f"Decompressing {self.IP2ASN_FILE} from {zip_file_name}"
                 )
-                gz = gzip.GzipFile(zip_file_name, "rb")
-                tsv_file = open(self.IP2ASN_FILE, "wb")
+                gz = gzip.GzipFile(f"{self.out_dir}{zip_file_name}", "rb")
+                tsv_file = open(f"{self.out_dir}{self.IP2ASN_FILE}", "wb")
                 tsv_file.write(gz.read())
                 tsv_file.close()
                 gz.close()
-            elif not os.path.isfile(zip_file_name) and not os.path.isfile(
-                self.IP2ASN_FILE
+            elif not os.path.isfile(f"{self.out_dir}{zip_file_name}") and not os.path.isfile(
+                f"{self.out_dir}{self.IP2ASN_FILE}"
             ):
                 raise ValueError(
                     f"Unable to find compressed ASN file: {zip_file_name}"
@@ -201,7 +203,7 @@ class DataGeneration:
                 )
 
             # Load TSV ASN Data
-            with open(self.IP2ASN_FILE, "r") as fd:
+            with open(f"{self.out_dir}{self.IP2ASN_FILE}", "r") as fd:
                 _reader = csv.reader(fd, delimiter="\t", quotechar='"')
                 ip2asn = list(_reader)
 
@@ -243,7 +245,7 @@ class DataGeneration:
                 f"Filter dropped {dropped} of {routes_count} routes, {routes_count - dropped} routes remaining"
             )
             self.log("Saving Cleaned ASN List")
-            with open(self.IP2ASN_CLEAN_FILE, "w") as fd:
+            with open(f"{self.out_dir}{self.IP2ASN_CLEAN_FILE}", "w") as fd:
                 write = csv.writer(fd, delimiter="\t", quotechar='"')
                 write.writerows(ip2asn)
         return ip2asn
@@ -559,7 +561,6 @@ class DataGeneration:
         job_progress: Progress,
         job_task: int,
         sampling_rate: int,
-        data_dir: str,
     ) -> Tuple[int, int]:
         """Actual method to make records from synth netflow records.
 
@@ -569,7 +570,6 @@ class DataGeneration:
             job_progress (Progress): Dashboard Progress
             job_task (int): Dashboard Progress Job ID
             sampling_rate (int): Sampling rate
-            data_dir (str): The directory to write the data files to
 
         Raises:
             OSError: _description_
@@ -586,14 +586,14 @@ class DataGeneration:
         
         try:
             # Setup output CSV files
-            self.log(f"Creating files {data_dir}raw_flow.csv and {data_dir}sampled_flow.csv")
-            csv_raw_file: TextIO = open(f"{data_dir}raw_flow.csv", "w")
-            csv_sampled_file: TextIO = open(f"{data_dir}sampled_flow.csv", "w")
+            self.log(f"Creating files {self.out_dir}raw_flow.csv and {self.out_dir}sampled_flow.csv")
+            csv_raw_file: TextIO = open(f"{self.out_dir}raw_flow.csv", "w")
+            csv_sampled_file: TextIO = open(f"{self.out_dir}sampled_flow.csv", "w")
             
             current_flow, future_flow = self.generate_flow_record(0)
             flow_csv_keys = list(current_flow.keys())
             
-            self.log(f"Writing csv headers to {data_dir}raw_flow.csv and {data_dir}sampled_flow.csv")
+            self.log(f"Writing csv headers to {self.out_dir}raw_flow.csv and {self.out_dir}sampled_flow.csv")
             raw_flow_csv_writer = csv.DictWriter(csv_raw_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
             sampled_flow_csv_writer = csv.DictWriter(csv_sampled_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
             raw_flow_csv_writer.writeheader()
