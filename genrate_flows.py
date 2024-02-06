@@ -310,7 +310,10 @@ if __name__ == "__main__":
                 message (str): log message
             """
             print(f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z {message}")
-            
+
+    total_minutes: Tuple[int, int] = (0, 0)
+    gen_minutes: Tuple[int, int] = (0, 0)
+    report_minutes: Tuple[int, int] = (0, 0)
     total_start_time = datetime.now()
     
     if args.rich:
@@ -349,7 +352,7 @@ if __name__ == "__main__":
                     job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
                     
                     end = (datetime.now() - start_time)
-                    minutes = divmod(end.seconds, 60)
+                    gen_minutes = divmod(end.seconds, 60)
                     
                 if not args.no_reports:
                     from graph import Graphing
@@ -363,7 +366,7 @@ if __name__ == "__main__":
                         report_gen_job_id=report_gen_job_id
                     )
                     end = (datetime.now() - start_time)
-                    minutes = divmod(end.seconds, 60)
+                    report_minutes = divmod(end.seconds, 60)
                                     
                 total_end = (datetime.now() - total_start_time)
                 total_minutes = divmod(total_end.seconds, 60)
@@ -416,7 +419,7 @@ if __name__ == "__main__":
             )
             
             end = (datetime.now() - start_time)
-            minutes = divmod(end.seconds, 60)
+            gen_minutes = divmod(end.seconds, 60)
             
         if not args.no_reports:
             from graph import Graphing
@@ -430,7 +433,7 @@ if __name__ == "__main__":
                 report_gen_job_id=report_gen_job_id
             )
             end = (datetime.now() - start_time)
-            minutes = divmod(end.seconds, 60)
+            report_minutes = divmod(end.seconds, 60)
                             
         total_end = (datetime.now() - total_start_time)
         total_minutes = divmod(total_end.seconds, 60)
@@ -442,7 +445,7 @@ if __name__ == "__main__":
     if not args.reports_only:
         print(f"Total raw flows made: {total_flows_made}")
         print(f"Total sampled flows made: {total_sampled_flows_made}")
-        print(f"Time taken to genrate flows: {minutes[0]} minutes, {minutes[1]} seconds")
+        print(f"Time taken to genrate flows: {gen_minutes[0]} minutes, {gen_minutes[1]} seconds")
         
     if not args.no_reports:
-        print(f"Time taken to make reports: {minutes[0]} minutes, {minutes[1]} seconds")
+        print(f"Time taken to make reports: {report_minutes[0]} minutes, {report_minutes[1]} seconds")
