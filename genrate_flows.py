@@ -17,6 +17,90 @@ __version__ = "0.0.1"
 
 import argparse
 from datetime import datetime 
+import logging
+import os
+import uuid
+from random import randint, randrange
+from typing import (
+    BinaryIO,
+    Dict,
+    List,
+    Optional,
+    TextIO,
+    Tuple,
+    TypedDict,
+)
+from urllib.request import Request, urlopen
+
+from blessed import Terminal
+from rich.align import Align
+from rich.console import (
+    Console,
+    Group,
+    ConsoleOptions,
+    RenderResult,
+    RenderableType,
+)
+from rich.highlighter import ReprHighlighter
+from rich.layout import Layout
+from rich.live import Live
+from rich.logging import RichHandler
+from rich.panel import Panel
+from rich.pretty import Pretty
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TransferSpeedColumn,
+)
+from rich.style import StyleType
+from rich.table import Table
+from rich.text import Text
+
+class LoggingWindow:
+    """An internal renderable used as a Layout logger."""
+
+    highlighter = ReprHighlighter()
+    logs: List[str]
+
+    def __init__(self, style: StyleType = "") -> None:
+        """Rich Renderable Logging Window.
+
+        Args:
+            style (StyleType, optional): Rich style. Defaults to "".
+        """
+        self.style = style
+        self.logs = []
+
+    def append(self, message: RenderableType) -> None:
+        """Add new element to be rendered.
+
+        Args:
+            message (RenderableType): The Rich renderable to add
+        """
+        self.logs.append(message)
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        """Call by console.
+
+        Args:
+            console (Console): Rich console
+            options (ConsoleOptions): Rich console metadata
+
+        Returns:
+            RenderResult: Rich rendering info
+
+        Yields:
+            Iterator[RenderResult]: Rich rendering info
+        """
+        height = options.height or options.size.height
+        while len(self.logs) > height - 2:
+            self.logs.pop(0)
+        yield Panel(Group(*self.logs), title="Logs", title_align="left")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -98,45 +182,190 @@ if __name__ == "__main__":
     data_dir: str = args.output_dir     
     if (len(args.output_dir) > 0 and not args.output_dir.endswith("/")):
         data_dir += "/"
+        
+    total_flows_to_make = 0
+    flows_per_ms = 1
+    if not args.reports_only:
+        flows_per_ms = args.fps // 1000
+        flows_per_ms = flows_per_ms if flows_per_ms > 0 else 1
+        total_flows_to_make = (args.time * 1000 * flows_per_ms)
     
+    layout = Layout(name="root")
+    layout.split(
+        Layout(name="header", size=3),
+        Layout(name="main", ratio=1),
+        Layout(name="footer", size=3),
+    )
+    layout["main"].split_row(
+        Layout(name="body", ratio=2),
+        Layout(name="side", minimum_size=20),
+    )
+    layout["side"].split(
+        Layout(name="info"),
+        Layout(name="meta", size=6),
+        Layout(name="commands"),
+    )
+    layout["header"].update(
+        Panel(Text("FermiHDI Flow Genrator", justify="center"))
+    )
+    layout["footer"].update(
+        Panel(Text("© COPYRIGHT 2024 FERMIHDI LIMITED", justify="center"))
+    )
+    logging_window = LoggingWindow()
+    layout["body"].update(logging_window)
+        
+    # Setup the info display
+    rt_progress = Progress(
+        "{task.description}",
+        SpinnerColumn(),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        expand=False,
+    )
+    rt_job_id = rt_progress.add_task("[cyan]Route Table ", total=4)
+    job_progress = Progress(
+        "{task.description}",
+        SpinnerColumn(),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        expand=False,
+    )
+    cd_job_id = job_progress.add_task(
+        "[cyan]Generating Data", total=total_flows_to_make
+    )
+    layout["meta"].update(
+        Panel(
+            Align.center(
+                Group(rt_progress, job_progress), vertical="middle"
+            )
+        )
+    )
+
+    info_table = Table(box=None)
+    info_table.add_column(justify="left", no_wrap=True)
+    info_table.add_column(justify="left", no_wrap=True)
+    info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
+    write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
+    info_table.add_row("Writing file to:", f"{write_dir}")
+    info_table.add_row(
+        "",
+        "",
+    )
+    layout["info"].update(
+        Panel(info_table, title="Information")
+    )
+
+    command_table = Table(box=None, title="Commands")
+    command_table.add_column(justify="left", no_wrap=True)
+    command_table.add_column(justify="left", no_wrap=True)
+    command_table.add_row("q:", "Exit")
+    layout["commands"].update(Panel(command_table))
+
+    def log(message: str) -> None:
+        """Print a log.
+
+        Args:
+            message (str): log message
+        """
+        logging_window.append(
+            Text.assemble(
+                (
+                    f"{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
+                    "cyan",
+                ),
+                f" {message}",
+            )
+        )
+            
     total_start_time = datetime.now()
     
-    if not args.reports_only:
-        from data_gen import DataGeneration
-        gen = DataGeneration()
-        
-        gen.make_layout()
+    try:
+        with Live(layout, refresh_per_second=10, screen=True):
+            if not args.reports_only:
+                from data_gen import DataGeneration
+                gen = DataGeneration(log=log, layout=layout)
+                
+                # gen.make_layout()
 
-        start_time = datetime.now()
-        flows_made, sampled_flows_made = gen.load_random_data(
-            time=args.time,
-            fps=args.fps,
-            sampling_rate=args.sampling_rate,
-            auto_exit=args.exit,
-            data_dir=data_dir
-        )
-        end = (datetime.now() - start_time)
-        minutes = divmod(end.seconds, 60)
-        
-        print(f"Done genrating data")
-        print(f"Total raw flows made: {flows_made}")
-        print(f"Total sampled flows made: {sampled_flows_made}")
-        print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
-        
-    if not args.no_reports:
-        from graph import Graphing
-        reports = Graphing(output_dir=data_dir)
-        
-        start_time = datetime.now()
-        reports.genrate_reports(genrate_peering_report=args.peering_report, topn=args.topN)
-        end = (datetime.now() - start_time)
-        minutes = divmod(end.seconds, 60)
-        
-        print(f"Done making reports")
-        print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
-        
-    total_end = (datetime.now() - total_start_time)
-    total_minutes = divmod(total_end.seconds, 60)
+                start_time = datetime.now()
+                
+                log("Getting ASNs")
+                asn_table = gen.get_asns()
+                rt_progress.update(task_id=rt_job_id, advance=1)
+                log("Selecting ASNs")
+                selected_asns = gen.random_asns(
+                    asn_table=asn_table, asns_to_select=1000
+                )
+                rt_progress.update(task_id=rt_job_id, advance=1)
+                log("Building Route Table")
+                gen.make_route_table(asns=selected_asns)
+                rt_progress.update(task_id=rt_job_id, advance=1)
+                log("Building Server Table")
+                gen.build_server_ip_table(
+                    from_ip=gen.SERVER_RANGE[0], to_ip=gen.SERVER_RANGE[1]
+                )
+                rt_progress.update(task_id=rt_job_id, advance=1)
+                gen.log("Generating Flow Data")
+                total_flows_made, total_sampled_flows_made = gen.generate_data(
+                    flows_to_make=total_flows_to_make,
+                    flows_per_ms=flows_per_ms,
+                    job_progress=job_progress,
+                    job_task=cd_job_id,
+                    sampling_rate=args.sampling_rate,
+                    data_dir=data_dir,
+                )
+                job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
+                
+                # flows_made, sampled_flows_made = gen.load_random_data(
+                #     time=args.time,
+                #     fps=args.fps,
+                #     sampling_rate=args.sampling_rate,
+                #     auto_exit=args.exit,
+                #     data_dir=data_dir,
+                #     rt_progress=rt_progress,
+                #     rt_job_id=rt_job_id,
+                #     job_progress=job_progress,
+                #     cd_job_id=cd_job_id,
+                # )
+                
+                end = (datetime.now() - start_time)
+                minutes = divmod(end.seconds, 60)
+                
+                print(f"Done genrating data")
+                print(f"Total raw flows made: {flows_made}")
+                print(f"Total sampled flows made: {sampled_flows_made}")
+                print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
+                
+            if not args.no_reports:
+                from graph import Graphing
+                reports = Graphing(output_dir=data_dir)
+                
+                start_time = datetime.now()
+                reports.genrate_reports(genrate_peering_report=args.peering_report, topn=args.topN)
+                end = (datetime.now() - start_time)
+                minutes = divmod(end.seconds, 60)
+                
+                print(f"Done making reports")
+                print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
+                
+            total_end = (datetime.now() - total_start_time)
+            total_minutes = divmod(total_end.seconds, 60)
+            
+            if not args.exit:
+                term = Terminal()
+                with term.cbreak():
+                    val = ""
+                    while val not in (
+                        "q",
+                        "Q",
+                    ):
+                        val = term.inkey()
+                        if val.is_sequence:  # type: ignore
+                            if val.name == "KEY_ESCAPE" or val.name == "KEY_BACKSPACE":  # type: ignore
+                                break
+                                
+    except KeyboardInterrupt as e:
+        log(f"Keyboard interrupt: {e}")
     
     print(f"Done!")
     print(f"Total Time Taken: {total_minutes[0]} minutes, {total_minutes[1]} seconds")

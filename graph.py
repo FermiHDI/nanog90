@@ -226,23 +226,43 @@ class Graphing:
         
         df["bps"] = df["dOctets"] / (df["last"] - df["first"])
         
-        src_asns_dOctets: pd.DataFrame = df[["src_as", "bps"]].query("src_as < 64000").groupby("src_as").mean()
-        dst_asns_dOctets: pd.DataFrame = df[["dst_as", "bps"]].query("dst_as < 64000").groupby("dst_as").mean()
+        src_asns_dOctets_: pd.DataFrame = df[["src_as", "bps"]].query("src_as < 64000")
+        src_asns_dOctets_min: pd.DataFrame = src_asns_dOctets_.groupby("src_as").min()
+        src_asns_dOctets_max: pd.DataFrame = src_asns_dOctets_.groupby("src_as").max()
+        src_asns_dOctets: pd.DataFrame = src_asns_dOctets_.groupby("src_as").mean()
+        
+        dst_asns_dOctets_: pd.DataFrame = df[["dst_as", "bps"]].query("dst_as < 64000")
+        dst_asns_dOctets_min: pd.DataFrame = dst_asns_dOctets_.groupby("dst_as").min()
+        dst_asns_dOctets_max: pd.DataFrame = dst_asns_dOctets_.groupby("dst_as").max()
+        dst_asns_dOctets: pd.DataFrame = dst_asns_dOctets_.groupby("dst_as").mean()
+        
         src_asns_adders: pd.DataFrame = df[["src_as", "srcaddr"]].query("src_as < 64000")
         dst_asns_adders: pd.DataFrame = df[["dst_as", "dstaddr"]].query("dst_as < 64000")
         
-        df2 = df.query("dst_as < 64000")
-        print(df2)
-        
         src_asns_dOctets.rename(columns={"src_as": "as", "bps": "src_bps"}, inplace=True)
+        src_asns_dOctets_min.rename(columns={"src_as": "as", "bps": "src_bps_min"}, inplace=True)
+        src_asns_dOctets_max.rename(columns={"src_as": "as", "bps": "src_bps_max"}, inplace=True)
+        
         dst_asns_dOctets.rename(columns={"dst_as": "as", "bps": "dst_bps"}, inplace=True)
+        dst_asns_dOctets_min.rename(columns={"dst_as": "as", "bps": "dst_bps_min"}, inplace=True)
+        dst_asns_dOctets_max.rename(columns={"dst_as": "as", "bps": "dst_bps_max"}, inplace=True)
         
         src_asns_adders.rename(columns={"src_as": "as", "srcaddr": "address"}, inplace=True)
         dst_asns_adders.rename(columns={"dst_as": "as", "dstaddr": "address"}, inplace=True)
+        
         asns_adders: pd.DataFrame = pd.concat([src_asns_adders, dst_asns_adders]).groupby("as").nunique()
         del src_asns_adders, dst_asns_adders
         
-        asns: pd.DataFrame = pd.concat([src_asns_dOctets, dst_asns_dOctets, asns_adders], join="outer", axis=1)
+        asns: pd.DataFrame = pd.concat([
+            src_asns_dOctets, 
+            src_asns_dOctets_min, 
+            src_asns_dOctets_max, 
+            dst_asns_dOctets,
+            dst_asns_dOctets_min, 
+            dst_asns_dOctets_max, 
+            asns_adders, 
+        ], join="outer", axis=1)
+        
         asns["transit"] = pd.Series(choices(["Transit", "Non-Transit"], weights=[1,1], k=asns.shape[0]), index=asns.index) 
         asns["total_bandwidth"] = asns["src_bps"] + asns["dst_bps"]
         asns.index.name = "as"
@@ -301,26 +321,39 @@ class Graphing:
         max_unit: int = df["src_bps"].max()
         src_div, src_unit = self.get_unit_size(max_unit=max_unit)
         df["src_bps"] = df["src_bps"] / src_div
+        df["src_bps_min"] = df["src_bps_min"] / src_div
+        df["src_bps_max"] = df["src_bps_max"] / src_div
         
         max_unit = df["dst_bps"].max()
         dst_div, dst_unit = self.get_unit_size(max_unit=max_unit)
         df["dst_bps"] = df["dst_bps"] / dst_div
+        df["dst_bps_min"] = df["dst_bps_min"] / src_div
+        df["dst_bps_max"] = df["dst_bps_max"] / src_div
         
         try:
             fig = px.scatter(
                 df,
                 x="src_bps",
+                error_x="src_bps_max",
+                error_x_minus="src_bps_min",
+                log_x=True,
                 y="dst_bps",
+                error_y="dst_bps_max",
+                error_y_minus="dst_bps_min",
+                log_y=True,
+                trendline="ols",
                 size="address",
                 color="transit",
                 text="as",
                 labels={"src_bps": "Ingress Traffic", "dst_bps": "Egress Traffic", "address": "Count of unqiue IPs", "transit": "Transit", "as": "ASN"}, 
                 hover_name="as",
-                hover_data=["src_bps", "dst_bps", "address"]
+                hover_data=["src_bps", "dst_bps", "address"],
+                width=1000,
+                height=1000,
             )
             fig.update_traces(textposition='top center')
             fig.update_layout(
-                title_text=f'Peering Report For Top {df.shape[0]} ASNs',
+                title_text=f'Peering Report For Top {df.shape[0]} ASNs - Bubble Size = Unqiue IPs',
                 showlegend=True,
                 xaxis_ticksuffix=f" {src_unit}",
                 yaxis_ticksuffix=f" {dst_unit}",
@@ -378,40 +411,42 @@ class Graphing:
                 ip: str = self.ip_int_to_string(ip=address_queries[i])
                 print(f"Generating report {i+1} of 3 for IP {ip}")
                 agg_src_adders_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"srcaddr == {address_queries[i]}")
-                # if not self.save_df_as_line_graph_png(
-                #     df=agg_src_adders_dfs[i], 
-                #     filename=f"{self.output_dir}line_graph_for_ip_{address_queries[i]}.png", 
-                #     title=f"Traffic for source IP {ip}", 
-                #     color="srcaddr"
-                # ):
-                #     rc = False
-                #     break
-                # if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}ip_{address_queries[i]}.csv"):
-                #     rc = False
-                #     break
+                print(agg_src_adders_dfs[i])
+                if not self.save_df_as_line_graph_png(
+                    df=agg_src_adders_dfs[i], 
+                    filename=f"{self.output_dir}line_graph_for_ip_{address_queries[i]}.png", 
+                    title=f"Traffic for source IP {ip}", 
+                    color="srcaddr"
+                ):
+                    rc = False
+                    break
+                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}ip_{address_queries[i]}.csv"):
+                    rc = False
+                    break
                                 
                 print(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
                 agg_src_as_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"src_as == {as_queries[i]}")
-                # if not self.save_df_as_line_graph_png(
-                #     df=agg_src_as_dfs[i], 
-                #     filename=f"{self.output_dir}line_graph_for_as_{as_queries[i]}.png", 
-                #     title=f"Trafic for source ASN {as_queries[i]}", 
-                #     color="src_as"
-                # ):
-                #     rc = False
-                #     break
-                # if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{self.output_dir}as_{as_queries[i]}.csv"):
-                #     rc = False
-                #     break
+                print(agg_src_as_dfs[i])
+                if not self.save_df_as_line_graph_png(
+                    df=agg_src_as_dfs[i], 
+                    filename=f"{self.output_dir}line_graph_for_as_{as_queries[i]}.png", 
+                    title=f"Trafic for source ASN {as_queries[i]}", 
+                    color="src_as"
+                ):
+                    rc = False
+                    break
+                if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{self.output_dir}as_{as_queries[i]}.csv"):
+                    rc = False
+                    break
             
             if rc and genrate_peering_report:
                 print(f"Generating peering reports")
                 peering_report_df: pd.DataFrame = self.peering_report(df=self.raw_flow_df, topn=topn)
-                # print(peering_report_df)
-                # if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{self.output_dir}peering_report.png"):
-                #     rc = False
-                # if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{self.output_dir}peering_report.csv"):
-                #     rc = False
+                print(peering_report_df)
+                if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{self.output_dir}peering_report.png"):
+                    rc = False
+                if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{self.output_dir}peering_report.csv"):
+                    rc = False
 
         return rc
          

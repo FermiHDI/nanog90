@@ -3,3 +3,4 @@ blessed>=1.20.0
 plotly>=5.18.0
 pandas>=2.2.0
 kaleido>= 0.2.1
+statsmodels>=0.14.1

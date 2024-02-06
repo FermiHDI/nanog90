@@ -185,10 +185,10 @@ class DataGeneration:
         "next_hop_i": 167837954,
     }
     MAX_JITTER: int = 6
-    MAX_LIGHT_PACKET_B: int = 100000
-    MIN_LIGHT_PACKET_B: int = 10000
-    MAX_HEAVY_PACKET_B: int = 10000000
-    MIN_HEAVY_PACKET_B: int = 100000
+    MAX_LIGHT_PACKET_BYTES: int = 4000000
+    MIN_LIGHT_PACKET_BYTES: int = 2000000
+    MAX_HEAVY_PACKET_BYTES: int = 20000000
+    MIN_HEAVY_PACKET_BYTES: int = 4000000
     SERVER_AS_SOURCE_WEIGHT: int = 85  # Percent that the flow will heavy in the Server to Client direction
     SERVER_LATENCY: int = 15
     SERVER_PORT: List[int] = [443, 80, 22]
@@ -199,13 +199,15 @@ class DataGeneration:
 
     system_id: str = ""
     
-    def __init__(self, system_id: Optional[bytes] = None):
+    def __init__(self, log, layout, system_id: Optional[bytes] = None):
         """Init flow_gen class instance.
 
         If `system_id` is not given then a random 32 Byte ID is generated.
         Args:
             system_id (Optional[bytes]): 32 Byte System ID
         """
+        self.log = log
+        self.layout = layout
         self.first_three = True
         if system_id:
             self.system_id = system_id.hex()
@@ -509,34 +511,39 @@ class DataGeneration:
         server = self.random_server()
         # Randomly Select Transfer Sizes for flow set
         heavy_transfer_size = randint(  # nosec: B311
-            self.MIN_HEAVY_PACKET_B, 
-            self.MAX_HEAVY_PACKET_B
+            self.MIN_HEAVY_PACKET_BYTES, 
+            self.MAX_HEAVY_PACKET_BYTES
         )
         light_transfer_size = randint(  # nosec: B311
-            self.MIN_LIGHT_PACKET_B, 
-            self.MAX_LIGHT_PACKET_B
+            self.MIN_LIGHT_PACKET_BYTES, 
+            self.MAX_LIGHT_PACKET_BYTES
         )
         # Randomly picked heavy side
-        if randrange(0, 101) > self.SERVER_AS_SOURCE_WEIGHT:  # nosec: B311
+        if randrange(0, 100) > self.SERVER_AS_SOURCE_WEIGHT:  # nosec: B311
             client_transfer = heavy_transfer_size
             server_transfer = light_transfer_size
         else:
             client_transfer = light_transfer_size
             server_transfer = heavy_transfer_size
         # Build flow profile
+        # L3 Flow size in Bytes
         client_packets: int = (
             client_transfer // 1200
-        )  # L3 Packet Size in Bytes
+        )
+        # L4 Port
         client_port: int = randint(  # nosec: B311
             self.EPHEMERAL_PORTS[0], 
             self.EPHEMERAL_PORTS[1]
-        )
+        )  
+        # L3 Flow size in Bytes
         server_packets: int = (
             server_transfer // 1200
-        )  # L3 Packet Size in Bytes
+        )
+        # Flow start time in milliseconds
         client_start_time: int = time_index - randint(  # nosec: B311
             1, 60000
         )
+        # Flow start time in milliseconds
         server_start_time: int = time_index - randint(  # nosec: B311
             1, 60000
         )
@@ -775,27 +782,31 @@ class DataGeneration:
         self.logging_window = LoggingWindow()
         self.layout["body"].update(self.logging_window)
 
-    def log(self, message: str) -> None:
-        """Print a log.
+    # def log(self, message: str) -> None:
+    #     """Print a log.
 
-        Args:
-            message (str): log message
-        """
-        self.logging_window.append(
-            Text.assemble(
-                (
-                    f"{datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
-                    "cyan",
-                ),
-                f" {message}",
-            )
-        )
+    #     Args:
+    #         message (str): log message
+    #     """
+    #     self.logging_window.append(
+    #         Text.assemble(
+    #             (
+    #                 f"{datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
+    #                 "cyan",
+    #             ),
+    #             f" {message}",
+    #         )
+    #     )
 
     def load_random_data(
         self,
         time: int,
         fps: int,
         sampling_rate: int,
+        rt_progress,
+        rt_job_id,
+        job_progress,
+        cd_job_id,
         auto_exit: bool = False,
         data_dir: str = "",
     ) -> Tuple[int, int]:
@@ -820,96 +831,96 @@ class DataGeneration:
         flows_per_ms = flows_per_ms if flows_per_ms > 0 else 1
         total_flows_to_make = (time * 1000 * flows_per_ms)
         
-        # Setup the info display
-        rt_progress = Progress(
-            "{task.description}",
-            SpinnerColumn(),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            expand=False,
-        )
-        rt_job_id = rt_progress.add_task("[cyan]Route Table ", total=4)
-        job_progress = Progress(
-            "{task.description}",
-            SpinnerColumn(),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            expand=False,
-        )
-        cd_job_id = job_progress.add_task(
-            "[cyan]Generating Data", total=total_flows_to_make
-        )
-        self.layout["meta"].update(
-            Panel(
-                Align.center(
-                    Group(rt_progress, job_progress), vertical="middle"
-                )
-            )
-        )
+        # # Setup the info display
+        # rt_progress = Progress(
+        #     "{task.description}",
+        #     SpinnerColumn(),
+        #     BarColumn(),
+        #     TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        #     expand=False,
+        # )
+        # rt_job_id = rt_progress.add_task("[cyan]Route Table ", total=4)
+        # job_progress = Progress(
+        #     "{task.description}",
+        #     SpinnerColumn(),
+        #     BarColumn(),
+        #     TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        #     expand=False,
+        # )
+        # cd_job_id = job_progress.add_task(
+        #     "[cyan]Generating Data", total=total_flows_to_make
+        # )
+        # self.layout["meta"].update(
+        #     Panel(
+        #         Align.center(
+        #             Group(rt_progress, job_progress), vertical="middle"
+        #         )
+        #     )
+        # )
 
-        info_table = Table(box=None)
-        info_table.add_column(justify="left", no_wrap=True)
-        info_table.add_column(justify="left", no_wrap=True)
-        info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
-        write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
-        info_table.add_row("Writing file to:", f"{write_dir}")
-        info_table.add_row(
-            "",
-            "",
-        )
-        self.layout["info"].update(
-            Panel(info_table, title="Information")
-        )
+        # info_table = Table(box=None)
+        # info_table.add_column(justify="left", no_wrap=True)
+        # info_table.add_column(justify="left", no_wrap=True)
+        # info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
+        # write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
+        # info_table.add_row("Writing file to:", f"{write_dir}")
+        # info_table.add_row(
+        #     "",
+        #     "",
+        # )
+        # self.layout["info"].update(
+        #     Panel(info_table, title="Information")
+        # )
 
-        command_table = Table(box=None, title="Commands")
-        command_table.add_column(justify="left", no_wrap=True)
-        command_table.add_column(justify="left", no_wrap=True)
-        command_table.add_row("q:", "Exit")
-        self.layout["commands"].update(Panel(command_table))
+        # command_table = Table(box=None, title="Commands")
+        # command_table.add_column(justify="left", no_wrap=True)
+        # command_table.add_column(justify="left", no_wrap=True)
+        # command_table.add_row("q:", "Exit")
+        # self.layout["commands"].update(Panel(command_table))
         
-        try:
-            with Live(self.layout, refresh_per_second=10, screen=True):
-                self.log("Getting ASNs")
-                asn_table = self.get_asns()
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                self.log("Selecting ASNs")
-                selected_asns = self.random_asns(
-                    asn_table=asn_table, asns_to_select=1000
-                )
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                self.log("Building Route Table")
-                self.make_route_table(asns=selected_asns)
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                self.log("Building Server Table")
-                self.build_server_ip_table(
-                    from_ip=self.SERVER_RANGE[0], to_ip=self.SERVER_RANGE[1]
-                )
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                self.log("Generating Flow Data")
-                total_flows_made, total_sampled_flows_made = self.generate_data(
-                    flows_to_make=total_flows_to_make,
-                    flows_per_ms=flows_per_ms,
-                    job_progress=job_progress,
-                    job_task=cd_job_id,
-                    sampling_rate=sampling_rate,
-                    data_dir=data_dir,
-                )
-                job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
+        # try:
+        with Live(self.layout, refresh_per_second=10, screen=True):
+            self.log("Getting ASNs")
+            asn_table = self.get_asns()
+            rt_progress.update(task_id=rt_job_id, advance=1)
+            self.log("Selecting ASNs")
+            selected_asns = self.random_asns(
+                asn_table=asn_table, asns_to_select=1000
+            )
+            rt_progress.update(task_id=rt_job_id, advance=1)
+            self.log("Building Route Table")
+            self.make_route_table(asns=selected_asns)
+            rt_progress.update(task_id=rt_job_id, advance=1)
+            self.log("Building Server Table")
+            self.build_server_ip_table(
+                from_ip=self.SERVER_RANGE[0], to_ip=self.SERVER_RANGE[1]
+            )
+            rt_progress.update(task_id=rt_job_id, advance=1)
+            self.log("Generating Flow Data")
+            total_flows_made, total_sampled_flows_made = self.generate_data(
+                flows_to_make=total_flows_to_make,
+                flows_per_ms=flows_per_ms,
+                job_progress=job_progress,
+                job_task=cd_job_id,
+                sampling_rate=sampling_rate,
+                data_dir=data_dir,
+            )
+            job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
 
-                if not auto_exit:
-                    term = Terminal()
-                    with term.cbreak():
-                        val = ""
-                        while val not in (
-                            "q",
-                            "Q",
-                        ):
-                            val = term.inkey()
-                            if val.is_sequence:  # type: ignore
-                                if val.name == "KEY_ESCAPE" or val.name == "KEY_BACKSPACE":  # type: ignore
-                                    break
-                                
-        except KeyboardInterrupt as e:
-            self.log(f"Keyboard interrupt: {e}")
+            if not auto_exit:
+                term = Terminal()
+                with term.cbreak():
+                    val = ""
+                    while val not in (
+                        "q",
+                        "Q",
+                    ):
+                        val = term.inkey()
+                        if val.is_sequence:  # type: ignore
+                            if val.name == "KEY_ESCAPE" or val.name == "KEY_BACKSPACE":  # type: ignore
+                                break
+                            
+            # except KeyboardInterrupt as e:
+            #     self.log(f"Keyboard interrupt: {e}")
         
         return (total_flows_made, total_sampled_flows_made)
