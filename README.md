@@ -9,8 +9,44 @@ This repo holds non-sensitive source code used at and to perpare for NANOG 90 in
 
 ## License
 
-./genrate_flows.py -o data -t 600 -f 200000 -s 1000  -pr --topN 10 -x
-
-UNLICENSED - Private
-ALL RIGHTS RESERVED
+UNLICENSED - Private<br/>
+ALL RIGHTS RESERVED<br/>
 © COPYRIGHT 2024 FERMIHDI LIMITED
+
+## Running Script In Docker
+```bash
+docker build -t fermihdi/nanog90:flowgen .
+mkdir data
+docker run -v ./data:/data --name flowgen fermihdi/nanog90:flowgen
+```
+
+## Getting Help
+```bash
+docker run -it --name flowgen fermihdi/nanog90:flowgen --help
+
+FermiHDI Generate Synth Netflow
+
+options:
+  -h, --help            show this help message and exit
+  -t TIME, --time TIME  Time in seconds, defaults to 600 seconds
+  -f FPS, --fps FPS     The Flow rate to simulate in the data, defaults to 200000
+  -s SAMPLING_RATE, --sampling_rate SAMPLING_RATE
+                        The n:1 flow sampling to be emulated, defaults to 1000
+  -o OUTPUT_DIR, --output_dir OUTPUT_DIR
+                        The directory where the data files will be written, defaults to current directory
+  -ro, --reports_only, --no-reports_only
+                        Genrate a reports only (default: False)
+  -nr, --no_reports, --no-no_reports
+                        Do not genrate any reports (default: False)
+  -pr, --peering_report, --no-peering_report
+                        Genrate perring reports (default: True)
+  --topN TOPN           The length of the Top N elements to use in reports, defualts to 10
+  --rich, --no-rich     Use rich UI (Not advisable under docker) (default: False)
+  -V                    Display the version and exit
+  -x, --exit            Auto exit when done
+```
+
+## Sugested Parameters
+```bash
+docker run -it --name flowgen fermihdi/nanog90:flowgen --rich -t 600 -f 200000 -s 1000 -pr --topN 10 -x
+```

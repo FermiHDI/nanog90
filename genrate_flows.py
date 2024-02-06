@@ -165,6 +165,13 @@ if __name__ == "__main__":
         help="The length of the Top N elements to use in reports, defualts to 10",
     )
     parser.add_argument(
+        "--rich",
+        action=argparse.BooleanOptionalAction,
+        type=bool,
+        default=False,
+        help="Use rich UI (Not advisable under docker)",
+    )
+    parser.add_argument(
         "-V",
         action="version",
         version=__version__,
@@ -293,99 +300,157 @@ if __name__ == "__main__":
     command_table.add_row("q:", "Exit")
     layout["commands"].update(Panel(command_table))
 
-    def log(message: str) -> None:
-        """Print a log.
+    if args.rich:
+        def log(message: str) -> None:
+            """Print a log.
 
-        Args:
-            message (str): log message
-        """
-        logging_window.append(
-            Text.assemble(
-                (
-                    f"{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
-                    "cyan",
-                ),
-                f" {message}",
+            Args:
+                message (str): log message
+            """
+            logging_window.append(
+                Text.assemble(
+                    (
+                        f"{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
+                        "cyan",
+                    ),
+                    f" {message}",
+                )
             )
-        )
+    else:
+        def log(message: str) -> None:
+            """Print a log.
+
+            Args:
+                message (str): log message
+            """
+            print(f"{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z {message}")
             
     total_start_time = datetime.now()
     
-    try:
-        with Live(layout, refresh_per_second=10, screen=True):
-            if not args.reports_only:
-                from data_gen import DataGeneration
-                gen = DataGeneration(log=log)
-                
-                # gen.make_layout()
+    if args.rich:
+        try:
+            with Live(layout, refresh_per_second=10, screen=True):
+                if not args.reports_only:
+                    from data_gen import DataGeneration
+                    gen = DataGeneration(log=log)
 
-                start_time = datetime.now()
+                    start_time = datetime.now()
+                    
+                    log("Getting ASNs")
+                    asn_table = gen.get_asns()
+                    rt_progress.update(task_id=rt_job_id, advance=1)
+                    log("Selecting ASNs")
+                    selected_asns = gen.random_asns(
+                        asn_table=asn_table, asns_to_select=1000
+                    )
+                    rt_progress.update(task_id=rt_job_id, advance=1)
+                    log("Building Route Table")
+                    gen.make_route_table(asns=selected_asns)
+                    rt_progress.update(task_id=rt_job_id, advance=1)
+                    log("Building Server Table")
+                    gen.build_server_ip_table(
+                        from_ip=gen.SERVER_RANGE[0], to_ip=gen.SERVER_RANGE[1]
+                    )
+                    rt_progress.update(task_id=rt_job_id, advance=1)
+                    gen.log("Generating Flow Data")
+                    total_flows_made, total_sampled_flows_made = gen.generate_data(
+                        flows_to_make=total_flows_to_make,
+                        flows_per_ms=flows_per_ms,
+                        job_progress=job_progress,
+                        job_task=cd_job_id,
+                        sampling_rate=args.sampling_rate,
+                        data_dir=data_dir,
+                    )
+                    job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
+                    
+                    end = (datetime.now() - start_time)
+                    minutes = divmod(end.seconds, 60)
+                    
+                if not args.no_reports:
+                    from graph import Graphing
+                    reports = Graphing(output_dir=data_dir, log=log)
+                    
+                    start_time = datetime.now()
+                    reports.genrate_reports(
+                        genrate_peering_report=args.peering_report, 
+                        topn=args.topN, 
+                        report_gen_progress=report_gen_progress, 
+                        report_gen_job_id=report_gen_job_id
+                    )
+                    end = (datetime.now() - start_time)
+                    minutes = divmod(end.seconds, 60)
+                                    
+                total_end = (datetime.now() - total_start_time)
+                total_minutes = divmod(total_end.seconds, 60)
                 
-                log("Getting ASNs")
-                asn_table = gen.get_asns()
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                log("Selecting ASNs")
-                selected_asns = gen.random_asns(
-                    asn_table=asn_table, asns_to_select=1000
-                )
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                log("Building Route Table")
-                gen.make_route_table(asns=selected_asns)
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                log("Building Server Table")
-                gen.build_server_ip_table(
-                    from_ip=gen.SERVER_RANGE[0], to_ip=gen.SERVER_RANGE[1]
-                )
-                rt_progress.update(task_id=rt_job_id, advance=1)
-                gen.log("Generating Flow Data")
-                total_flows_made, total_sampled_flows_made = gen.generate_data(
-                    flows_to_make=total_flows_to_make,
-                    flows_per_ms=flows_per_ms,
-                    job_progress=job_progress,
-                    job_task=cd_job_id,
-                    sampling_rate=args.sampling_rate,
-                    data_dir=data_dir,
-                )
-                job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
+                info_table.add_row("Completed at:", f"{datetime.utcnow()}")
+                info_table.add_row("Elapsed time:", f"{total_minutes[0]} minutes, {total_minutes[1]} seconds")
                 
-                end = (datetime.now() - start_time)
-                minutes = divmod(end.seconds, 60)
-                
-            if not args.no_reports:
-                from graph import Graphing
-                reports = Graphing(output_dir=data_dir, log=log)
-                
-                start_time = datetime.now()
-                reports.genrate_reports(
-                    genrate_peering_report=args.peering_report, 
-                    topn=args.topN, 
-                    report_gen_progress=report_gen_progress, 
-                    report_gen_job_id=report_gen_job_id
-                )
-                end = (datetime.now() - start_time)
-                minutes = divmod(end.seconds, 60)
-                                
-            total_end = (datetime.now() - total_start_time)
-            total_minutes = divmod(total_end.seconds, 60)
+                if not args.exit:
+                    term = Terminal()
+                    with term.cbreak():
+                        val = ""
+                        while val not in (
+                            "q",
+                            "Q",
+                        ):
+                            val = term.inkey()
+                            if val.is_sequence:  # type: ignore
+                                if val.name == "KEY_ESCAPE" or val.name == "KEY_BACKSPACE":  # type: ignore
+                                    break
+                                    
+        except KeyboardInterrupt as e:
+            log(f"Keyboard interrupt: {e}")
+    
+    else:
+        if not args.reports_only:
+            from data_gen import DataGeneration
+            gen = DataGeneration(log=log)
+
+            start_time = datetime.now()
             
-            info_table.add_row("Completed at:", f"{datetime.utcnow()}")
-            info_table.add_row("Elapsed time:", f"{total_minutes[0]} minutes, {total_minutes[1]} seconds")
+            log("Getting ASNs")
+            asn_table = gen.get_asns()
+            log("Selecting ASNs")
+            selected_asns = gen.random_asns(
+                asn_table=asn_table, asns_to_select=1000
+            )
+            log("Building Route Table")
+            gen.make_route_table(asns=selected_asns)
+            log("Building Server Table")
+            gen.build_server_ip_table(
+                from_ip=gen.SERVER_RANGE[0], to_ip=gen.SERVER_RANGE[1]
+            )
+            gen.log("Generating Flow Data")
+            total_flows_made, total_sampled_flows_made = gen.generate_data(
+                flows_to_make=total_flows_to_make,
+                flows_per_ms=flows_per_ms,
+                job_progress=job_progress,
+                job_task=cd_job_id,
+                sampling_rate=args.sampling_rate,
+                data_dir=data_dir,
+            )
             
-            if not args.exit:
-                term = Terminal()
-                with term.cbreak():
-                    val = ""
-                    while val not in (
-                        "q",
-                        "Q",
-                    ):
-                        val = term.inkey()
-                        if val.is_sequence:  # type: ignore
-                            if val.name == "KEY_ESCAPE" or val.name == "KEY_BACKSPACE":  # type: ignore
-                                break
-                                
-    except KeyboardInterrupt as e:
-        log(f"Keyboard interrupt: {e}")
+            end = (datetime.now() - start_time)
+            minutes = divmod(end.seconds, 60)
+            
+        if not args.no_reports:
+            from graph import Graphing
+            reports = Graphing(output_dir=data_dir, log=log)
+            
+            start_time = datetime.now()
+            reports.genrate_reports(
+                genrate_peering_report=args.peering_report, 
+                topn=args.topN, 
+                report_gen_progress=report_gen_progress, 
+                report_gen_job_id=report_gen_job_id
+            )
+            end = (datetime.now() - start_time)
+            minutes = divmod(end.seconds, 60)
+                            
+        total_end = (datetime.now() - total_start_time)
+        total_minutes = divmod(total_end.seconds, 60)
+                
     
     print(f"Done!")
     print(f"Total Time Taken: {total_minutes[0]} minutes, {total_minutes[1]} seconds")
