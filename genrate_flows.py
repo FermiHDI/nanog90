@@ -155,7 +155,7 @@ if __name__ == "__main__":
         "--peering_report",
         action=argparse.BooleanOptionalAction,
         type=bool,
-        default=False,
+        default=True,
         help="Genrate perring reports",
     )
     parser.add_argument(
