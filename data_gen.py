@@ -586,12 +586,14 @@ class DataGeneration:
         
         try:
             # Setup output CSV files
+            self.log(f"Creating files {data_dir}raw_flow.csv and {data_dir}sampled_flow.csv")
             csv_raw_file: TextIO = open(f"{data_dir}raw_flow.csv", "w")
             csv_sampled_file: TextIO = open(f"{data_dir}sampled_flow.csv", "w")
             
             current_flow, future_flow = self.generate_flow_record(0)
             flow_csv_keys = list(current_flow.keys())
             
+            self.log(f"Writing csv headers to {data_dir}raw_flow.csv and {data_dir}sampled_flow.csv")
             raw_flow_csv_writer = csv.DictWriter(csv_raw_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
             sampled_flow_csv_writer = csv.DictWriter(csv_sampled_file, delimiter=",", quotechar='"', fieldnames=flow_csv_keys)
             raw_flow_csv_writer.writeheader()
