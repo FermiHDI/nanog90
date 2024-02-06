@@ -9,6 +9,8 @@ This repo holds non-sensitive source code used at and to perpare for NANOG 90 in
 
 ## License
 
+./genrate_flows.py -o data -t 600 -f 200000 -s 1000  -pr --topN 10 -x
+
 UNLICENSED - Private
 ALL RIGHTS RESERVED
 © COPYRIGHT 2024 FERMIHDI LIMITED
