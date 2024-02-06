@@ -117,7 +117,7 @@ if __name__ == "__main__":
         "-o",
         "--output_dir",
         type=str,
-        default="",
+        default="/data",
         help="The directory where the data files will be written, defaults to current directory",
     )
     parser.add_argument(
