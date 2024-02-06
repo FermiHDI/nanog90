@@ -242,9 +242,9 @@ if __name__ == "__main__":
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         expand=False,
     )
-    report_jobs = 9
+    report_jobs = 15
     if args.peering_report:
-        report_jobs = 10
+        report_jobs = 16
     report_gen_job_id = report_gen_progress.add_task(
         "[cyan]Generating Reports ", total=report_jobs
     )
