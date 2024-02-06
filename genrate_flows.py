@@ -17,20 +17,6 @@ __version__ = "0.0.1"
 
 import argparse
 from datetime import datetime 
-import logging
-import os
-import uuid
-from random import randint, randrange
-from typing import (
-    BinaryIO,
-    Dict,
-    List,
-    Optional,
-    TextIO,
-    Tuple,
-    TypedDict,
-)
-from urllib.request import Request, urlopen
 
 from blessed import Terminal
 from rich.align import Align
@@ -44,16 +30,12 @@ from rich.console import (
 from rich.highlighter import ReprHighlighter
 from rich.layout import Layout
 from rich.live import Live
-from rich.logging import RichHandler
 from rich.panel import Panel
-from rich.pretty import Pretty
 from rich.progress import (
     BarColumn,
-    DownloadColumn,
     Progress,
     SpinnerColumn,
     TextColumn,
-    TransferSpeedColumn,
 )
 from rich.style import StyleType
 from rich.table import Table

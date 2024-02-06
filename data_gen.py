@@ -16,15 +16,12 @@ __status__ = "Development"
 __version__ = "0.0.1"
 
 import csv
-import datetime
 import gzip
 import ipaddress
-import logging
 import os
 import uuid
 from random import randint, randrange
 from typing import (
-    BinaryIO,
     Dict,
     List,
     Optional,
@@ -34,32 +31,9 @@ from typing import (
 )
 from urllib.request import Request, urlopen
 
-from blessed import Terminal
-from rich.align import Align
-from rich.console import (
-    Console,
-    Group,
-    ConsoleOptions,
-    RenderResult,
-    RenderableType,
-)
-from rich.highlighter import ReprHighlighter
-from rich.layout import Layout
-from rich.live import Live
-from rich.logging import RichHandler
-from rich.panel import Panel
-from rich.pretty import Pretty
 from rich.progress import (
-    BarColumn,
-    DownloadColumn,
     Progress,
-    SpinnerColumn,
-    TextColumn,
-    TransferSpeedColumn,
 )
-from rich.style import StyleType
-from rich.table import Table
-from rich.text import Text
 
 class FlowRecord(TypedDict):
     """A Typping object for a Flow Record."""
@@ -85,16 +59,6 @@ class FlowRecord(TypedDict):
     src_mask: int
     dst_mask: int
 
-logging.basicConfig(
-    level="NOTSET",
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True)],
-)
-log = logging.getLogger("")
-
-console = Console()
-
 class ASNRoute(TypedDict, total=False):
     """A Typing object for a ASN Route's Metadata."""
 
@@ -116,50 +80,6 @@ class NetworkInterface(TypedDict, total=False):
     next_hop: str
     next_hop_b: bytes
     next_hop_i: int
-
-class LoggingWindow:
-    """An internal renderable used as a Layout logger."""
-
-    highlighter = ReprHighlighter()
-    logs: List[str]
-
-    def __init__(self, style: StyleType = "") -> None:
-        """Rich Renderable Logging Window.
-
-        Args:
-            style (StyleType, optional): Rich style. Defaults to "".
-        """
-        self.style = style
-        self.logs = []
-
-    def append(self, message: RenderableType) -> None:
-        """Add new element to be rendered.
-
-        Args:
-            message (RenderableType): The Rich renderable to add
-        """
-        self.logs.append(message)
-
-    def __rich_console__(
-        self, console: Console, options: ConsoleOptions
-    ) -> RenderResult:
-        """Call by console.
-
-        Args:
-            console (Console): Rich console
-            options (ConsoleOptions): Rich console metadata
-
-        Returns:
-            RenderResult: Rich rendering info
-
-        Yields:
-            Iterator[RenderResult]: Rich rendering info
-        """
-        height = options.height or options.size.height
-        while len(self.logs) > height - 2:
-            self.logs.pop(0)
-        yield Panel(Group(*self.logs), title="Logs", title_align="left")
-
 
 class DataGeneration:
     """Produce flow random based on NetFlow v5."""
