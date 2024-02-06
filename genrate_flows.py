@@ -17,6 +17,10 @@ __version__ = "0.0.1"
 
 import argparse
 from datetime import datetime 
+from typing import (
+    List,
+    Tuple,
+)
 
 from blessed import Terminal
 from rich.align import Align
