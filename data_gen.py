@@ -199,15 +199,15 @@ class DataGeneration:
 
     system_id: str = ""
     
-    def __init__(self, log, layout, system_id: Optional[bytes] = None):
+    def __init__(self, log, system_id: Optional[bytes] = None):
         """Init flow_gen class instance.
 
         If `system_id` is not given then a random 32 Byte ID is generated.
         Args:
+            log: Logging function
             system_id (Optional[bytes]): 32 Byte System ID
         """
         self.log = log
-        self.layout = layout
         self.first_three = True
         if system_id:
             self.system_id = system_id.hex()
@@ -753,174 +753,5 @@ class DataGeneration:
                 pass
             del raw_flows
             del flows
-        
-        return (total_flows_made, total_sampled_flows_made)
-
-    def make_layout(self) -> None:
-        """Build display layout."""
-        self.layout = Layout(name="root")
-        self.layout.split(
-            Layout(name="header", size=3),
-            Layout(name="main", ratio=1),
-            Layout(name="footer", size=3),
-        )
-        self.layout["main"].split_row(
-            Layout(name="body", ratio=2),
-            Layout(name="side", minimum_size=20),
-        )
-        self.layout["side"].split(
-            Layout(name="info"),
-            Layout(name="meta", size=6),
-            Layout(name="commands"),
-        )
-        self.layout["header"].update(
-            Panel(Text("FermiHDI Flow Genrator", justify="center"))
-        )
-        self.layout["footer"].update(
-            Panel(Text("© COPYRIGHT 2024 FERMIHDI LIMITED", justify="center"))
-        )
-        self.logging_window = LoggingWindow()
-        self.layout["body"].update(self.logging_window)
-
-    # def log(self, message: str) -> None:
-    #     """Print a log.
-
-    #     Args:
-    #         message (str): log message
-    #     """
-    #     self.logging_window.append(
-    #         Text.assemble(
-    #             (
-    #                 f"{datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
-    #                 "cyan",
-    #             ),
-    #             f" {message}",
-    #         )
-    #     )
-
-    def load_random_data(
-        self,
-        time: int,
-        fps: int,
-        sampling_rate: int,
-        rt_progress,
-        rt_job_id,
-        job_progress,
-        cd_job_id,
-        auto_exit: bool = False,
-        data_dir: str = "",
-    ) -> Tuple[int, int]:
-        """Load random flows.
-
-        Args:
-            time (int): Time semulated in seconds
-            fps (int): flows per second to emulate
-            sampling_rate (int): The sampleing rate of x:1 that the emulated will use
-            auto_exit (bool, optional): Exit when completed.  Defaults to False
-            data_dir (str): The directory to write the data files to
-
-        Raises:
-            IndexError: Size to big for MMAP
-
-        Returns:
-            int: Total Flows Made
-        """
-
-        # Quick calculations the amount of data being produced
-        flows_per_ms = fps // 1000
-        flows_per_ms = flows_per_ms if flows_per_ms > 0 else 1
-        total_flows_to_make = (time * 1000 * flows_per_ms)
-        
-        # # Setup the info display
-        # rt_progress = Progress(
-        #     "{task.description}",
-        #     SpinnerColumn(),
-        #     BarColumn(),
-        #     TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        #     expand=False,
-        # )
-        # rt_job_id = rt_progress.add_task("[cyan]Route Table ", total=4)
-        # job_progress = Progress(
-        #     "{task.description}",
-        #     SpinnerColumn(),
-        #     BarColumn(),
-        #     TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        #     expand=False,
-        # )
-        # cd_job_id = job_progress.add_task(
-        #     "[cyan]Generating Data", total=total_flows_to_make
-        # )
-        # self.layout["meta"].update(
-        #     Panel(
-        #         Align.center(
-        #             Group(rt_progress, job_progress), vertical="middle"
-        #         )
-        #     )
-        # )
-
-        # info_table = Table(box=None)
-        # info_table.add_column(justify="left", no_wrap=True)
-        # info_table.add_column(justify="left", no_wrap=True)
-        # info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
-        # write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
-        # info_table.add_row("Writing file to:", f"{write_dir}")
-        # info_table.add_row(
-        #     "",
-        #     "",
-        # )
-        # self.layout["info"].update(
-        #     Panel(info_table, title="Information")
-        # )
-
-        # command_table = Table(box=None, title="Commands")
-        # command_table.add_column(justify="left", no_wrap=True)
-        # command_table.add_column(justify="left", no_wrap=True)
-        # command_table.add_row("q:", "Exit")
-        # self.layout["commands"].update(Panel(command_table))
-        
-        # try:
-        with Live(self.layout, refresh_per_second=10, screen=True):
-            self.log("Getting ASNs")
-            asn_table = self.get_asns()
-            rt_progress.update(task_id=rt_job_id, advance=1)
-            self.log("Selecting ASNs")
-            selected_asns = self.random_asns(
-                asn_table=asn_table, asns_to_select=1000
-            )
-            rt_progress.update(task_id=rt_job_id, advance=1)
-            self.log("Building Route Table")
-            self.make_route_table(asns=selected_asns)
-            rt_progress.update(task_id=rt_job_id, advance=1)
-            self.log("Building Server Table")
-            self.build_server_ip_table(
-                from_ip=self.SERVER_RANGE[0], to_ip=self.SERVER_RANGE[1]
-            )
-            rt_progress.update(task_id=rt_job_id, advance=1)
-            self.log("Generating Flow Data")
-            total_flows_made, total_sampled_flows_made = self.generate_data(
-                flows_to_make=total_flows_to_make,
-                flows_per_ms=flows_per_ms,
-                job_progress=job_progress,
-                job_task=cd_job_id,
-                sampling_rate=sampling_rate,
-                data_dir=data_dir,
-            )
-            job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
-
-            if not auto_exit:
-                term = Terminal()
-                with term.cbreak():
-                    val = ""
-                    while val not in (
-                        "q",
-                        "Q",
-                    ):
-                        val = term.inkey()
-                        if val.is_sequence:  # type: ignore
-                            if val.name == "KEY_ESCAPE" or val.name == "KEY_BACKSPACE":  # type: ignore
-                                break
-                            
-            # except KeyboardInterrupt as e:
-            #     self.log(f"Keyboard interrupt: {e}")
         
         return (total_flows_made, total_sampled_flows_made)

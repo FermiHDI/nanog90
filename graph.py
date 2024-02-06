@@ -48,11 +48,13 @@ class Graphing:
     raw_flow_file_path: str = ""
     sampled_flow_file_path: str = ""
     
-    def __init__(self, output_dir: str = "") -> None:
+    def __init__(self, log, output_dir: str = "") -> None:
         """Init graphing class instance.
         Args:
+            log: Logging function
             output_dir (Optional[str]): The directory where graphes should be written. Defaults to curent directory.
         """
+        self.log = log
         self.output_dir = output_dir
         self.raw_flow_file_path = f"{self.output_dir}/{self.raw_flow_csv}"
         self.sampled_flow_file_path = f"{self.output_dir}/{self.sampled_flow_csv}"
@@ -139,7 +141,7 @@ class Graphing:
                     rc = False
                     raise RuntimeError('CSV is empty')
             except Exception as e:
-                print(f'There was an error in {self.raw_flow_file_path} input: {e}')
+                self.log(f'There was an error in {self.raw_flow_file_path} input: {e}')
         return rc
     
     def load_sampled_flows(self) -> bool:
@@ -169,7 +171,7 @@ class Graphing:
                     rc = False
                     raise RuntimeError('CSV is empty')
             except Exception as e:
-                print(f'There was an error in {self.sampled_flow_file_path} input: {e}')
+                self.log(f'There was an error in {self.sampled_flow_file_path} input: {e}')
         return rc
         
     def select_random_flows(self) -> Tuple[List[int], List[int]]:
@@ -305,7 +307,7 @@ class Graphing:
             fig.write_image(filename)
             rc = True
         except Exception as e:
-            print(f'There was an error in {filename} output: {e}')
+            self.log(f'There was an error in {filename} output: {e}')
         
         return rc
     
@@ -363,7 +365,7 @@ class Graphing:
             rc = True
             
         except Exception as e:
-            print(f'There was an error in {filename} output: {e}')
+            self.log(f'There was an error in {filename} output: {e}')
         
         return rc
     
@@ -381,11 +383,11 @@ class Graphing:
             df.to_csv(filename)
             rc = True
         except Exception as e:
-            print(f'There was an error in {filename} output: {e}')
+            self.log(f'There was an error in {filename} output: {e}')
         
         return rc
     
-    def genrate_reports(self, genrate_peering_report: bool, topn: int = 0) -> bool:
+    def genrate_reports(self, genrate_peering_report: bool, report_gen_progress, report_gen_job_id, topn: int = 0) -> bool:
         """Generate reports
         Args:
             genrate_peering_report (bool): Whether or not to generate peering reports
@@ -396,22 +398,24 @@ class Graphing:
         rc: bool = True
         
         if self.check_for_data_files():
-            print(f"Loading data files")
+            self.log(f"Loading data files")
             self.load_raw_flows()
+            report_gen_progress.update(task_id=report_gen_job_id, advance=1)
             self.load_sampled_flows()
+            report_gen_progress.update(task_id=report_gen_job_id, advance=1)
             
-            print(f"Selecting random flows to be used for queries")
+            self.log(f"Selecting random flows to be used for queries")
             address_queries, as_queries = self.select_random_flows()
+            report_gen_progress.update(task_id=report_gen_job_id, advance=1)
             
             agg_src_as_dfs: List[pd.DataFrame] = [None] * 3
             agg_src_adders_dfs: List[pd.DataFrame] = [None] * 3
             
-            print(f"Generating reports")            
+            self.log(f"Generating reports")            
             for i in range(0, 3):
                 ip: str = self.ip_int_to_string(ip=address_queries[i])
-                print(f"Generating report {i+1} of 3 for IP {ip}")
+                self.log(f"Generating report {i+1} of 3 for IP {ip}")
                 agg_src_adders_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"srcaddr == {address_queries[i]}")
-                print(agg_src_adders_dfs[i])
                 if not self.save_df_as_line_graph_png(
                     df=agg_src_adders_dfs[i], 
                     filename=f"{self.output_dir}line_graph_for_ip_{address_queries[i]}.png", 
@@ -423,10 +427,10 @@ class Graphing:
                 if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}ip_{address_queries[i]}.csv"):
                     rc = False
                     break
+                report_gen_progress.update(task_id=report_gen_job_id, advance=1)
                                 
-                print(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
+                self.log(f"Generating report {i+1} of 3 for ASN {as_queries[i]}")
                 agg_src_as_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"src_as == {as_queries[i]}")
-                print(agg_src_as_dfs[i])
                 if not self.save_df_as_line_graph_png(
                     df=agg_src_as_dfs[i], 
                     filename=f"{self.output_dir}line_graph_for_as_{as_queries[i]}.png", 
@@ -438,15 +442,16 @@ class Graphing:
                 if not self.save_df_as_csv(df=agg_src_as_dfs[i], filename=f"{self.output_dir}as_{as_queries[i]}.csv"):
                     rc = False
                     break
+                report_gen_progress.update(task_id=report_gen_job_id, advance=1)
             
             if rc and genrate_peering_report:
-                print(f"Generating peering reports")
+                self.log(f"Generating peering reports")
                 peering_report_df: pd.DataFrame = self.peering_report(df=self.raw_flow_df, topn=topn)
-                print(peering_report_df)
                 if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{self.output_dir}peering_report.png"):
                     rc = False
                 if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{self.output_dir}peering_report.csv"):
                     rc = False
+                report_gen_progress.update(task_id=report_gen_job_id, advance=1)
 
         return rc
          

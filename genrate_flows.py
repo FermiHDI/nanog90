@@ -223,6 +223,7 @@ if __name__ == "__main__":
         expand=False,
     )
     rt_job_id = rt_progress.add_task("[cyan]Route Table ", total=4)
+    
     job_progress = Progress(
         "{task.description}",
         SpinnerColumn(),
@@ -233,6 +234,21 @@ if __name__ == "__main__":
     cd_job_id = job_progress.add_task(
         "[cyan]Generating Data", total=total_flows_to_make
     )
+    
+    report_gen_progress = Progress(
+        "{task.description}",
+        SpinnerColumn(),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        expand=False,
+    )
+    report_jobs = 9
+    if args.peering_report:
+        report_jobs = 10
+    report_gen_job_id = report_gen_progress.add_task(
+        "[cyan]Generating Reports ", total=report_jobs
+    )
+    
     layout["meta"].update(
         Panel(
             Align.center(
@@ -283,7 +299,7 @@ if __name__ == "__main__":
         with Live(layout, refresh_per_second=10, screen=True):
             if not args.reports_only:
                 from data_gen import DataGeneration
-                gen = DataGeneration(log=log, layout=layout)
+                gen = DataGeneration(log=log)
                 
                 # gen.make_layout()
 
@@ -316,38 +332,18 @@ if __name__ == "__main__":
                 )
                 job_progress.update(task_id=cd_job_id, advance=total_flows_to_make)
                 
-                # flows_made, sampled_flows_made = gen.load_random_data(
-                #     time=args.time,
-                #     fps=args.fps,
-                #     sampling_rate=args.sampling_rate,
-                #     auto_exit=args.exit,
-                #     data_dir=data_dir,
-                #     rt_progress=rt_progress,
-                #     rt_job_id=rt_job_id,
-                #     job_progress=job_progress,
-                #     cd_job_id=cd_job_id,
-                # )
-                
                 end = (datetime.now() - start_time)
                 minutes = divmod(end.seconds, 60)
-                
-                print(f"Done genrating data")
-                print(f"Total raw flows made: {flows_made}")
-                print(f"Total sampled flows made: {sampled_flows_made}")
-                print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
                 
             if not args.no_reports:
                 from graph import Graphing
-                reports = Graphing(output_dir=data_dir)
+                reports = Graphing(output_dir=data_dir, log=log)
                 
                 start_time = datetime.now()
-                reports.genrate_reports(genrate_peering_report=args.peering_report, topn=args.topN)
+                reports.genrate_reports(genrate_peering_report=args.peering_report, topn=args.topN, report_gen_progress=report_gen_progress, report_gen_job_id=report_gen_job_id)
                 end = (datetime.now() - start_time)
                 minutes = divmod(end.seconds, 60)
-                
-                print(f"Done making reports")
-                print(f"Time Taken: {minutes[0]} minutes, {minutes[1]} seconds")
-                
+                                
             total_end = (datetime.now() - total_start_time)
             total_minutes = divmod(total_end.seconds, 60)
             
@@ -369,3 +365,11 @@ if __name__ == "__main__":
     
     print(f"Done!")
     print(f"Total Time Taken: {total_minutes[0]} minutes, {total_minutes[1]} seconds")
+    
+    if not args.reports_only:
+        print(f"Total raw flows made: {total_flows_made}")
+        print(f"Total sampled flows made: {total_sampled_flows_made}")
+        print(f"Time taken to genrate flows: {minutes[0]} minutes, {minutes[1]} seconds")
+        
+    if not args.no_reports:
+        print(f"Time taken to make reports: {minutes[0]} minutes, {minutes[1]} seconds")
