@@ -663,6 +663,10 @@ class DataGeneration:
             if e.errno == 12:
                 raise OSError("Memory could not be allocated for drive size")
         
+        except Exception as e:
+            self.log(f"Error generating data: {e}")
+            raise e
+        
         finally:
             try:
                 if not csv_raw_file or not csv_raw_file.closed:
