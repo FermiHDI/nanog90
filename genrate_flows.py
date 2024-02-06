@@ -275,7 +275,7 @@ if __name__ == "__main__":
     info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
     write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
     info_table.add_row("Writing files to:", f"{write_dir}")
-    info_table.add_row("Started at:", f"{datetime.utcnow()}",)
+    info_table.add_row("Started at:", f"{datetime.now(datetime.UTC)}",)
     layout["info"].update(
         Panel(info_table, title="Information")
     )
@@ -296,7 +296,7 @@ if __name__ == "__main__":
             logging_window.append(
                 Text.assemble(
                     (
-                        f"{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
+                        f"{datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z",
                         "cyan",
                     ),
                     f" {message}",
@@ -309,7 +309,7 @@ if __name__ == "__main__":
             Args:
                 message (str): log message
             """
-            print(f"{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z {message}")
+            print(f"{datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z {message}")
             
     total_start_time = datetime.now()
     
@@ -369,7 +369,7 @@ if __name__ == "__main__":
                 total_end = (datetime.now() - total_start_time)
                 total_minutes = divmod(total_end.seconds, 60)
                 
-                info_table.add_row("Completed at:", f"{datetime.utcnow()}")
+                info_table.add_row("Completed at:", f"{datetime.now(datetime.UTC)}")
                 info_table.add_row("Elapsed time:", f"{total_minutes[0]} minutes, {total_minutes[1]} seconds")
                 
                 if not args.exit:
