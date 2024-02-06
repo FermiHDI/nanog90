@@ -249,13 +249,32 @@ if __name__ == "__main__":
         "[cyan]Generating Reports ", total=report_jobs
     )
     
-    layout["meta"].update(
-        Panel(
-            Align.center(
-                Group(rt_progress, job_progress), vertical="middle"
+    if args.no_reports:
+        layout["meta"].update(
+            Panel(
+                Align.center(
+                    Group(rt_progress, job_progress), vertical="middle"
+                )
             )
         )
-    )
+    
+    if args.reports_only:
+        layout["meta"].update(
+            Panel(
+                Align.center(
+                    Group(report_gen_progress), vertical="middle"
+                )
+            )
+        )
+    
+    if not args.no_reports and not args.reports_only:
+        layout["meta"].update(
+            Panel(
+                Align.center(
+                    Group(rt_progress, job_progress, report_gen_progress), vertical="middle"
+                )
+            )
+        )
 
     info_table = Table(box=None)
     info_table.add_column(justify="left", no_wrap=True)
@@ -340,7 +359,12 @@ if __name__ == "__main__":
                 reports = Graphing(output_dir=data_dir, log=log)
                 
                 start_time = datetime.now()
-                reports.genrate_reports(genrate_peering_report=args.peering_report, topn=args.topN, report_gen_progress=report_gen_progress, report_gen_job_id=report_gen_job_id)
+                reports.genrate_reports(
+                    genrate_peering_report=args.peering_report, 
+                    topn=args.topN, 
+                    report_gen_progress=report_gen_progress, 
+                    report_gen_job_id=report_gen_job_id
+                )
                 end = (datetime.now() - start_time)
                 minutes = divmod(end.seconds, 60)
                                 

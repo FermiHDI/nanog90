@@ -6,8 +6,8 @@ sampled_flow.csv
 data/
 
 # Python
-__python__/
 __pycache__/
+__pycache__
 
 # Prerequisites
 *.d

@@ -343,7 +343,6 @@ class Graphing:
                 error_y="dst_bps_max",
                 error_y_minus="dst_bps_min",
                 log_y=True,
-                trendline="ols",
                 size="address",
                 color="transit",
                 text="as",
@@ -360,8 +359,30 @@ class Graphing:
                 xaxis_ticksuffix=f" {src_unit}",
                 yaxis_ticksuffix=f" {dst_unit}",
             )
+            fig.write_image(f"{filename}_a.png")
             
-            fig.write_image(filename)
+            fig = px.scatter(
+                df,
+                x="src_bps",
+                y="dst_bps",
+                size="address",
+                color="transit",
+                text="as",
+                labels={"src_bps": "Ingress Traffic", "dst_bps": "Egress Traffic", "address": "Count of unqiue IPs", "transit": "Transit", "as": "ASN"}, 
+                hover_name="as",
+                hover_data=["src_bps", "dst_bps", "address"],
+                width=1000,
+                height=1000,
+            )
+            fig.update_traces(textposition='top center')
+            fig.update_layout(
+                title_text=f'Peering Report For Top {df.shape[0]} ASNs - Bubble Size = Unqiue IPs',
+                showlegend=True,
+                xaxis_ticksuffix=f" {src_unit}",
+                yaxis_ticksuffix=f" {dst_unit}",
+            )
+            fig.write_image(f"{filename}_b.png")
+
             rc = True
             
         except Exception as e:
@@ -447,7 +468,10 @@ class Graphing:
             if rc and genrate_peering_report:
                 self.log(f"Generating peering reports")
                 peering_report_df: pd.DataFrame = self.peering_report(df=self.raw_flow_df, topn=topn)
-                if not self.save_peering_df_as_bubble_chart_png(df=peering_report_df, filename=f"{self.output_dir}peering_report.png"):
+                if not self.save_peering_df_as_bubble_chart_png(
+                    df=peering_report_df, 
+                    filename=f"{self.output_dir}peering_report"
+                ):
                     rc = False
                 if rc and not self.save_df_as_csv(df=peering_report_df, filename=f"{self.output_dir}peering_report.csv"):
                     rc = False
