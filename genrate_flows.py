@@ -239,7 +239,7 @@ if __name__ == "__main__":
         "{task.description}",
         SpinnerColumn(),
         BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TextColumn("{task.completed} of {task.total}"),
         expand=False,
     )
     report_jobs = 15
@@ -281,11 +281,8 @@ if __name__ == "__main__":
     info_table.add_column(justify="left", no_wrap=True)
     info_table.add_row("Total Flow Records:", f"{total_flows_to_make:n}")
     write_dir="Curent Directory" if len(data_dir) == 0 else data_dir
-    info_table.add_row("Writing file to:", f"{write_dir}")
-    info_table.add_row(
-        "",
-        "",
-    )
+    info_table.add_row("Writing files to:", f"{write_dir}")
+    info_table.add_row("Started at:", f"{datetime.utcnow()}",)
     layout["info"].update(
         Panel(info_table, title="Information")
     )
@@ -370,6 +367,9 @@ if __name__ == "__main__":
                                 
             total_end = (datetime.now() - total_start_time)
             total_minutes = divmod(total_end.seconds, 60)
+            
+            info_table.add_row("Completed at:", f"{datetime.utcnow()}")
+            info_table.add_row("Elapsed time:", f"{total_minutes[0]} minutes, {total_minutes[1]} seconds")
             
             if not args.exit:
                 term = Terminal()

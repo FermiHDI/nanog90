@@ -439,13 +439,13 @@ class Graphing:
                 agg_src_adders_dfs[i] = self.agg_df(df=self.raw_flow_df, query_str=f"srcaddr == {address_queries[i]}")
                 if not self.save_df_as_line_graph_png(
                     df=agg_src_adders_dfs[i], 
-                    filename=f"{self.output_dir}raw_flow_line_graph_for_ip_{address_queries[i]}.png", 
+                    filename=f"{self.output_dir}raw_flow_line_graph_for_ip_{ip}.png", 
                     title=f"Traffic for source IP {ip}", 
                     color="srcaddr"
                 ):
                     rc = False
                     break
-                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}raw_flow_ip_{address_queries[i]}.csv"):
+                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}raw_flow_ip_{ip}.csv"):
                     rc = False
                     break
                 report_gen_progress.update(task_id=report_gen_job_id, advance=1)
@@ -472,13 +472,13 @@ class Graphing:
                 agg_src_adders_dfs[i] = self.agg_df(df=self.sampled_flow_df, query_str=f"srcaddr == {address_queries[i]}")
                 if not self.save_df_as_line_graph_png(
                     df=agg_src_adders_dfs[i], 
-                    filename=f"{self.output_dir}sampled_flow_line_graph_for_ip_{address_queries[i]}.png", 
+                    filename=f"{self.output_dir}sampled_flow_line_graph_for_ip_{ip}.png", 
                     title=f"Traffic for source IP {ip}", 
                     color="srcaddr"
                 ):
                     rc = False
                     break
-                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}sampled_flow_ip_{address_queries[i]}.csv"):
+                if not self.save_df_as_csv(df=agg_src_adders_dfs[i], filename=f"{self.output_dir}sampled_flow_ip_{ip}.csv"):
                     rc = False
                     break
                 report_gen_progress.update(task_id=report_gen_job_id, advance=1)
