@@ -18,8 +18,9 @@ ALL RIGHTS RESERVED<br/>
 ## Running Script In Docker
 A docker file is included to help you get up and running as fast as posabule.
 ```bash
-mkdir data
 docker build -t fermihdi/nanog90:flowgen .
+cd ..
+mkdir data
 docker run -v ./data:/data --name flowgen fermihdi/nanog90:flowgen
 ```
 
@@ -51,5 +52,5 @@ options:
 
 ## Sugested Parameters
 ```bash
-docker run -it --name flowgen fermihdi/nanog90:flowgen --rich -t 600 -f 200000 -s 1000 -pr --topN 10 -x
+docker run -it -v ./data:/data --name flowgen fermihdi/nanog90:flowgen --rich -t 600 -f 200000 -s 1000 -pr --topN 10 -x
 ```
